@@ -1,0 +1,55 @@
+name: Deploy dashboard to GitHub Pages
+
+# Deploys the contents of web/ to GitHub Pages on every push to main.
+# Decompresses shap_top.json.gz into shap_top.json during the build so the
+# uncompressed file (101 MB) ends up on Pages. The decompressed file is too
+# big for git directly but fits inside a Pages artifact.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decompress SHAP attribution cache
+        run: |
+          if [ -f web/data/shap_top.json.gz ]; then
+            gunzip -k -f web/data/shap_top.json.gz
+            ls -lh web/data/shap_top.json
+          else
+            echo "WARN: web/data/shap_top.json.gz not found"
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact (web/ only)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
