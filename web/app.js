@@ -71,27 +71,52 @@
     h6: "2030 scenario · trained on data through 2018 · target 2024",
   };
 
+  const GEO_META = {
+    county: {
+      label: "County",
+      plural: "counties",
+      detail: "County detail",
+      intro: "One U.S. county, shown as a population-weighted rollup of the tracts inside it. Every prediction below estimates the chance this county becomes a small-business credit desert by the year shown.",
+      forecastLabel: "Forecasts for this county",
+      scenarioTitle: "Counties that crossed the high-risk line",
+      histLabel: "Counties per risk decile",
+      focusTopLabel: "Top 5 counties in state",
+    },
+    tract: {
+      label: "Tract",
+      plural: "tracts",
+      detail: "Tract detail",
+      intro: "One U.S. census tract, roughly a neighborhood of 4,000 people. Every prediction below estimates the chance this neighborhood becomes a small-business credit desert by the year shown.",
+      forecastLabel: "Forecasts for this neighborhood",
+      scenarioTitle: "Tracts that crossed the high-risk line",
+      histLabel: "Tracts per risk decile",
+      focusTopLabel: "Top 5 tracts in state",
+    },
+  };
+
   // Map data state
   const STATE = {
+    geoMode: "county",            // "county" or "tract"
     activeModel: "m1",
     activeHorizon: "h3",          // "h3" or "h6"
     focusedState: null,           // state abbreviation, or null
     sliderShifts: {},             // key → z-score shift
     feat: null,                   // feature_stats.json (flat: { key: {...} })
     states: null,                 // state_stats.json
+    countyStats: null,            // county_stats.json
     bbox: null,                   // state_bbox.json
     abl: { h3: null, h6: null },  // ablation_h{3,6}.json
     pruning: { h3: null, h6: null },
     regime: { h3: null, h6: null },
     rafId: null,
-    pinnedTract: null,            // tract properties object (or null)
+    pinnedFeature: null,          // active geography properties object (or null)
     shap: null,                   // shap_top.json (lazily loaded)
     shapLoading: false,
     shapTried: false,
-    // Scenario-linearized override values for the pinned tract's drawer.
+    // Scenario-linearized override values for the pinned feature's drawer.
     // Populated by applyScenarioToDrawer() whenever a slider is non-baseline.
     // Cleared (set null) when all sliders are at 0. When non-null, renderDrawer
-    // and renderDrawerShap read from these instead of the raw tract properties.
+    // and renderDrawerShap read from these instead of the raw feature properties.
     scenarioAdjustedRisks: null,  // { m1_h3, m1_h6, m2_h3, m2_h6 }
     scenarioAdjustedShap: null,   // { m1_h3: [[f,v],...], m1_h6:..., m2_h3:..., m2_h6:... }
     scenarioActiveLevers: null,   // [{label, z}, ...] for the plain-language note
@@ -484,6 +509,60 @@
   // active risk property name in the geojson, e.g., "m1_h3"
   const riskProp = () => `${STATE.activeModel}_${STATE.activeHorizon}`;
   const rankProp = () => `${STATE.activeModel}r_${STATE.activeHorizon}`;
+  const isCountyMode = () => STATE.geoMode === "county";
+  const activeGeoMeta = () => GEO_META[STATE.geoMode];
+  const activeFillLayerId = () => isCountyMode() ? "counties-fill" : "tracts-fill";
+  const activeHoverLayerId = () => isCountyMode() ? "counties-outline-hover" : "tracts-outline-hover";
+  const activePinnedLayerId = () => isCountyMode() ? "counties-outline-pinned" : "tracts-outline-pinned";
+  const geoMeanKey = (m, h) => isCountyMode() ? `county_mean_${m}_${h}` : `mean_${m}_${h}`;
+  const activeStateTopList = (stateRow, key) => isCountyMode()
+    ? ((stateRow.top_counties && stateRow.top_counties[key]) || [])
+    : ((stateRow.top && stateRow.top[key]) || []);
+
+  function setText(id, t) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t;
+  }
+
+  function activeFeatureCount() {
+    const n = STATE.states && STATE.states.feature_counts
+      ? STATE.states.feature_counts[STATE.geoMode]
+      : null;
+    return n != null ? n : (isCountyMode() ? 0 : 77036);
+  }
+
+  function activeHistogramStore() {
+    if (!STATE.states) return null;
+    if (STATE.states.national_histogram_by_geo) {
+      return STATE.states.national_histogram_by_geo[STATE.geoMode] || null;
+    }
+    return isCountyMode() ? null : (STATE.states.national_histogram || null);
+  }
+
+  function renderGeoCopy() {
+    const meta = activeGeoMeta();
+    document.body.dataset.geo = STATE.geoMode;
+    const count = activeFeatureCount();
+    setText("titleGeoCount", count ? count.toLocaleString() : "–");
+    setText("metaGeoCount", count ? count.toLocaleString() : "–");
+    setText("titleGeoLabel", meta.plural);
+    setText("metaGeoLabel", meta.plural);
+    setText("focusTopLabel", meta.focusTopLabel);
+    setText("scenarioTitle", meta.scenarioTitle);
+    setText("drawerKicker", meta.detail);
+    setText("drawerForecastLabel", meta.forecastLabel);
+    setText("drawerIntro", meta.intro);
+    const histCaption = `${meta.histLabel} · active model × horizon. Long left tail = most ${meta.plural} read low risk; the rightmost bar is the high-risk shoulder.`;
+    setText("histCaption", histCaption);
+    const mapEl = document.getElementById("map");
+    if (mapEl) mapEl.setAttribute("aria-label", `Choropleth map of U.S. ${meta.plural} colored by risk`);
+    const histEl = document.getElementById("natHisto");
+    if (histEl) histEl.setAttribute("aria-label", `Histogram of ${STATE.geoMode} risk by decile`);
+    const drawer = document.getElementById("drawer");
+    if (drawer) drawer.setAttribute("aria-label", meta.detail);
+    const close = document.getElementById("drawerClose");
+    if (close) close.setAttribute("aria-label", `Close ${meta.detail.toLowerCase()}`);
+  }
 
   const rampToExpr = () => {
     const ramp = RAMPS[STATE.activeModel];
@@ -513,12 +592,14 @@
   document.addEventListener("DOMContentLoaded", boot);
 
   async function boot() {
+    document.body.dataset.geo = "county";
     document.body.dataset.model = "m1";
     document.body.dataset.horizon = "h3";
 
-    const [feat, states, bbox, ablH3, ablH6, regH3, regH6, prH3, prH6] = await Promise.all([
+    const [feat, states, countyStats, bbox, ablH3, ablH6, regH3, regH6, prH3, prH6] = await Promise.all([
       fetchOptional("data/feature_stats.json"),
       fetchOptional("data/state_stats.json"),
+      fetchOptional("data/county_stats.json"),
       fetchOptional("data/state_bbox.json"),
       fetchOptional("data/ablation_h3.json"),
       fetchOptional("data/ablation_h6.json"),
@@ -529,6 +610,7 @@
     ]);
     STATE.feat    = feat;
     STATE.states  = states;
+    STATE.countyStats = countyStats;
     STATE.bbox    = bbox;
     STATE.abl     = { h3: ablH3, h6: ablH6 };
     STATE.regime  = { h3: regH3, h6: regH6 };
@@ -546,6 +628,7 @@
     bindDrawerClose();
     syncHorizonAffordances();
     initAccordions();
+    renderGeoCopy();
   }
 
   function initAccordions() {
@@ -602,6 +685,28 @@
         generateId: false,
         tolerance: 0.5,
       });
+      map.addSource("counties", {
+        type: "geojson",
+        data: "data/counties.geojson",
+        generateId: false,
+        tolerance: 0.5,
+      });
+
+      map.addLayer({
+        id: "counties-fill",
+        type: "fill",
+        source: "counties",
+        paint: {
+          "fill-color": rampToExpr(),
+          "fill-opacity": [
+            "case",
+            ["==", ["get", riskProp()], null], 0.18,
+            0.92,
+          ],
+          "fill-opacity-transition": { duration: 600, delay: 0 },
+          "fill-color-transition": { duration: 500, delay: 0 },
+        },
+      });
 
       // Tract fill — base coloring on the active model × horizon
       map.addLayer({
@@ -644,10 +749,11 @@
         id: "tracts-outline-hover",
         type: "line",
         source: "tracts",
+        filter: ["==", ["get", "f"], "__none__"],
         paint: {
           "line-color": "#fc5855",
           "line-width": 1.2,
-          "line-opacity": ["case", ["==", ["get", "f"], ["literal", ""]], 0, 0],
+          "line-opacity": 1,
         },
       });
 
@@ -682,6 +788,38 @@
           ],
         },
       });
+      map.addLayer({
+        id: "counties-outline-hover",
+        type: "line",
+        source: "counties",
+        filter: ["==", ["get", "f"], "__none__"],
+        paint: {
+          "line-color": "#fc5855",
+          "line-width": 1.4,
+          "line-opacity": 1,
+        },
+      });
+      map.addLayer({
+        id: "counties-outline-pinned",
+        type: "line",
+        source: "counties",
+        filter: ["==", ["get", "f"], "__none__"],
+        paint: {
+          "line-color": "#fc5855",
+          "line-width": 1.8,
+          "line-opacity": 1,
+        },
+      });
+      map.addLayer({
+        id: "counties-edge",
+        type: "line",
+        source: "counties",
+        paint: {
+          "line-color": "#0a1319",
+          "line-width": 0.45,
+          "line-opacity": 0.5,
+        },
+      });
 
       if (!REDUCED) {
         map.setPaintProperty("tracts-fill", "fill-opacity", [
@@ -691,28 +829,56 @@
         ]);
       }
 
+      syncGeoLayers();
       bindHover();
       bindClick();
     });
+  }
+
+  function syncGeoLayers() {
+    if (!map) return;
+    const countyVis = isCountyMode() ? "visible" : "none";
+    const tractVis = isCountyMode() ? "none" : "visible";
+    [
+      ["counties-fill", countyVis],
+      ["counties-outline-hover", countyVis],
+      ["counties-outline-pinned", countyVis],
+      ["counties-edge", countyVis],
+      ["tracts-fill", tractVis],
+      ["tracts-outline-hover", tractVis],
+      ["tracts-outline-pinned", tractVis],
+      ["tracts-edge", tractVis],
+      ["state-tint-overlay", tractVis],
+    ].forEach(([id, visibility]) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visibility);
+    });
+    resetHover();
   }
 
   // ---------------------------------------------------------------------
   // HOVER + CLICK
   // ---------------------------------------------------------------------
   let hoverFips = null;
-  function bindHover() {
+  function resetHover() {
+    hoverFips = null;
+    ["tracts-outline-hover", "counties-outline-hover"].forEach(id => {
+      if (map && map.getLayer(id)) map.setFilter(id, ["==", ["get", "f"], "__none__"]);
+    });
+    const tip = document.getElementById("tip");
+    if (tip) tip.hidden = true;
+    if (map) map.getCanvas().style.cursor = "";
+  }
+
+  function bindHoverForLayer(fillLayerId, hoverLayerId) {
     const tip = document.getElementById("tip");
 
-    map.on("mousemove", "tracts-fill", (e) => {
+    map.on("mousemove", fillLayerId, (e) => {
+      if (fillLayerId !== activeFillLayerId()) return;
       if (!e.features || !e.features.length) return;
       const p = e.features[0].properties;
       hoverFips = p.f;
 
-      map.setPaintProperty("tracts-outline-hover", "line-opacity", [
-        "case",
-        ["==", ["get", "f"], hoverFips], 1,
-        0,
-      ]);
+      map.setFilter(hoverLayerId, ["==", ["get", "f"], hoverFips || "__none__"]);
 
       tip.hidden = false;
 
@@ -769,25 +935,31 @@
       map.getCanvas().style.cursor = "crosshair";
     });
 
-    map.on("mouseleave", "tracts-fill", () => {
-      tip.hidden = true;
-      hoverFips = null;
-      map.setPaintProperty("tracts-outline-hover", "line-opacity", 0);
-      map.getCanvas().style.cursor = "";
+    map.on("mouseleave", fillLayerId, () => {
+      if (fillLayerId !== activeFillLayerId()) return;
+      resetHover();
     });
   }
 
+  function bindHover() {
+    bindHoverForLayer("counties-fill", "counties-outline-hover");
+    bindHoverForLayer("tracts-fill", "tracts-outline-hover");
+  }
+
   function bindClick() {
-    map.on("click", "tracts-fill", (e) => {
+    const bindClickForLayer = (fillLayerId) => map.on("click", fillLayerId, (e) => {
+      if (fillLayerId !== activeFillLayerId()) return;
       if (!e.features || !e.features.length) return;
       const p = e.features[0].properties;
-      // Toggle pin: click same tract again → close drawer.
-      if (STATE.pinnedTract && STATE.pinnedTract.f === p.f) {
-        unpinTract();
+      // Toggle pin: click same geography again closes the drawer.
+      if (STATE.pinnedFeature && STATE.pinnedFeature.f === p.f) {
+        unpinFeature();
       } else {
-        pinTract(p);
+        pinFeature(p);
       }
     });
+    bindClickForLayer("counties-fill");
+    bindClickForLayer("tracts-fill");
   }
 
   function flyToState(st) {
@@ -851,8 +1023,9 @@
     }
     document.getElementById("focusName").textContent = st;
     const aucActive = stateRow[`auc_${STATE.activeModel}_${STATE.activeHorizon}`];
+    const focusCount = isCountyMode() ? stateRow.n_counties : stateRow.n_tracts;
     document.getElementById("focusMeta").textContent =
-      `${stateRow.n.toLocaleString()} tracts · AUC ${aucActive != null ? aucActive.toFixed(3) : "–"} (${STATE.activeModel === "m1" ? "Diagnostic" : "Influenceable"} · ${HZ_YEAR[STATE.activeHorizon]})`;
+      `${(focusCount || 0).toLocaleString()} ${activeGeoMeta().plural} · AUC ${aucActive != null ? aucActive.toFixed(3) : "–"} (${STATE.activeModel === "m1" ? "Diagnostic" : "Influenceable"} · ${HZ_YEAR[STATE.activeHorizon]})`;
 
     // 2x2 grid: M1 h+3, M1 h+6, M2 h+3, M2 h+6
     const grid = document.getElementById("focusGrid");
@@ -864,10 +1037,10 @@
       { m: "m2", h: "h6", year: "2030" },
     ];
     // Find max mean across the 4 cells for relative bar widths
-    const means = cells.map(c => stateRow[`mean_${c.m}_${c.h}`]).filter(v => v != null);
+    const means = cells.map(c => stateRow[isCountyMode() ? `county_mean_${c.m}_${c.h}` : `mean_${c.m}_${c.h}`]).filter(v => v != null);
     const maxMean = means.length ? Math.max(...means) : 0.1;
     cells.forEach(c => {
-      const v = stateRow[`mean_${c.m}_${c.h}`];
+      const v = stateRow[isCountyMode() ? `county_mean_${c.m}_${c.h}` : `mean_${c.m}_${c.h}`];
       const auc = stateRow[`auc_${c.m}_${c.h}`];
       const isActive = c.m === STATE.activeModel && c.h === STATE.activeHorizon;
       const div = document.createElement("div");
@@ -885,9 +1058,9 @@
       grid.appendChild(div);
     });
 
-    // Top 5 tracts at active (model, horizon)
+    // Top 5 geographies at active (model, horizon)
     const topKey = `${STATE.activeModel}_${STATE.activeHorizon}`;
-    const top = (stateRow.top && stateRow.top[topKey]) || [];
+    const top = activeStateTopList(stateRow, topKey);
     const tEl = document.getElementById("focusTopTracts");
     tEl.innerHTML = "";
     top.forEach((t, i) => {
@@ -897,8 +1070,8 @@
       li.innerHTML = `
         <span class="toptract__rk">${String(i + 1).padStart(2, "0")}</span>
         <span class="toptract__body">
-          <span class="toptract__nm">${t.cn || "Census tract"}</span>
-          <span class="toptract__fips">${t.f}</span>
+          <span class="toptract__nm">${t.cn || (isCountyMode() ? "County" : "Census tract")}</span>
+          <span class="toptract__fips">${t.f || t.cf || "–"}</span>
         </span>
         <span class="toptract__v">${v != null ? (v * 100).toFixed(1) + "%" : "–"}</span>
       `;
@@ -907,24 +1080,29 @@
   }
 
   // ---------------------------------------------------------------------
-  // TRACT-DETAIL DRAWER
+  // GEOGRAPHY DETAIL DRAWER
   // ---------------------------------------------------------------------
-  function pinTract(p) {
-    STATE.pinnedTract = p;
-    // Update map outline filter to highlight the pinned tract.
-    if (map && map.getLayer("tracts-outline-pinned")) {
-      map.setFilter("tracts-outline-pinned", ["==", ["get", "f"], p.f || "__none__"]);
+  function pinFeature(p) {
+    STATE.pinnedFeature = p;
+    ["tracts-outline-pinned", "counties-outline-pinned"].forEach(id => {
+      if (map && map.getLayer(id)) map.setFilter(id, ["==", ["get", "f"], "__none__"]);
+    });
+    if (map && map.getLayer(activePinnedLayerId())) {
+      map.setFilter(activePinnedLayerId(), ["==", ["get", "f"], p.f || "__none__"]);
     }
     openDrawer();
     renderDrawer();
-    ensureShap();   // lazy-load SHAP attribution on first pin
+    if (!isCountyMode()) ensureShap();   // lazy-load SHAP attribution on first tract pin
   }
 
-  function unpinTract() {
-    STATE.pinnedTract = null;
-    if (map && map.getLayer("tracts-outline-pinned")) {
-      map.setFilter("tracts-outline-pinned", ["==", ["get", "f"], "__none__"]);
-    }
+  function unpinFeature() {
+    STATE.pinnedFeature = null;
+    STATE.scenarioAdjustedRisks = null;
+    STATE.scenarioAdjustedShap = null;
+    STATE.scenarioActiveLevers = null;
+    ["tracts-outline-pinned", "counties-outline-pinned"].forEach(id => {
+      if (map && map.getLayer(id)) map.setFilter(id, ["==", ["get", "f"], "__none__"]);
+    });
     closeDrawer();
   }
 
@@ -1037,8 +1215,8 @@
   // Populates STATE.scenarioAdjustedRisks / scenarioAdjustedShap, or clears
   // them when the scenario is at baseline. Caller should renderDrawer() after.
   function applyScenarioToDrawer() {
-    const p = STATE.pinnedTract;
-    if (!p) {
+    const p = STATE.pinnedFeature;
+    if (!p || isCountyMode()) {
       STATE.scenarioAdjustedRisks = null;
       STATE.scenarioAdjustedShap = null;
       STATE.scenarioActiveLevers = null;
@@ -1121,7 +1299,7 @@
   }
 
   function renderDrawer() {
-    const p = STATE.pinnedTract;
+    const p = STATE.pinnedFeature;
     if (!p) return;
 
     const num = (v) => (v == null || v === "null") ? null : Number(v);
@@ -1142,10 +1320,20 @@
     const stAbbr = p.st || "";
     const placeName = (stAbbr && !cn.endsWith(", " + stAbbr)) ? `${cn}, ${stAbbr}` : cn;
     document.getElementById("drawerFips").textContent = placeName;
-    document.getElementById("drawerSub").textContent = `Census tract ${p.f || "–"}`;
+    document.getElementById("drawerSub").textContent = isCountyMode()
+      ? `County FIPS ${p.f || p.cf || "–"}`
+      : `Census tract ${p.f || "–"}`;
     // Optional metadata line — show n_cra_lenders if it's in the properties.
     const metaEl = document.getElementById("drawerMeta");
-    if (p.n_cra_lenders != null && p.n_cra_lenders !== "") {
+    const countyDetail = isCountyMode() && STATE.countyStats ? STATE.countyStats[p.f || p.cf] : null;
+    if (isCountyMode() && countyDetail) {
+      const bits = [];
+      if (countyDetail.n_tracts != null) bits.push(`${countyDetail.n_tracts.toLocaleString()} tracts`);
+      if (countyDetail.population != null) bits.push(`${countyDetail.population.toLocaleString()} people`);
+      if (countyDetail.weighting) bits.push(countyDetail.weighting.replace(/_/g, " "));
+      metaEl.textContent = bits.join(" · ");
+      metaEl.hidden = !bits.length;
+    } else if (p.n_cra_lenders != null && p.n_cra_lenders !== "") {
       metaEl.textContent = `${p.n_cra_lenders} active CRA lenders in 2024`;
       metaEl.hidden = false;
     } else {
@@ -1175,9 +1363,9 @@
         const above = Math.round(c.r);          // % of state's tracts THIS tract beats
         const below = 100 - above;               // % above this tract
         if (above >= 50) {
-          rankTxt = `Higher risk than ${above}% of ${stAbbr || "state"} tracts`;
+          rankTxt = `Higher risk than ${above}% of ${stAbbr || "state"} ${activeGeoMeta().plural}`;
         } else {
-          rankTxt = `Lower risk than ${below}% of ${stAbbr || "state"} tracts`;
+          rankTxt = `Lower risk than ${below}% of ${stAbbr || "state"} ${activeGeoMeta().plural}`;
         }
       }
       const barW = (c.r == null) ? 0 : Math.max(1, Math.min(100, c.r));
@@ -1193,7 +1381,40 @@
     });
 
     renderDivergenceBlock();
+    renderCountyTopTracts(countyDetail);
     renderDrawerShap();
+  }
+
+  function renderCountyTopTracts(countyDetail) {
+    const wrap = document.getElementById("drawerCountyTopWrap");
+    const listEl = document.getElementById("drawerCountyTopTracts");
+    if (!wrap || !listEl) return;
+    listEl.innerHTML = "";
+    if (!isCountyMode() || !countyDetail) {
+      wrap.hidden = true;
+      return;
+    }
+    const key = `${STATE.activeModel}_${STATE.activeHorizon}`;
+    const rows = countyDetail.top_tracts && countyDetail.top_tracts[key] ? countyDetail.top_tracts[key] : [];
+    if (!rows.length) {
+      wrap.hidden = true;
+      return;
+    }
+    rows.slice(0, 5).forEach((t, i) => {
+      const v = t[key];
+      const li = document.createElement("li");
+      li.className = "toptract";
+      li.innerHTML = `
+        <span class="toptract__rk">${String(i + 1).padStart(2, "0")}</span>
+        <span class="toptract__body">
+          <span class="toptract__nm">${t.cn || "Census tract"}</span>
+          <span class="toptract__fips">${t.f || "–"}</span>
+        </span>
+        <span class="toptract__v">${v != null ? (v * 100).toFixed(1) + "%" : "–"}</span>
+      `;
+      listEl.appendChild(li);
+    });
+    wrap.hidden = false;
   }
 
   // -------------------------------------------------------------------
@@ -1238,7 +1459,7 @@
   function renderDivergenceBlock() {
     const wrap = document.getElementById("drawerDivergence");
     if (!wrap) return;
-    const p = STATE.pinnedTract;
+    const p = STATE.pinnedFeature;
     if (!p) { wrap.hidden = true; return; }
 
     const h = STATE.activeHorizon;
@@ -1285,6 +1506,9 @@
     const wrap = document.getElementById("drawerShap");
     const hzLbl = document.getElementById("drawerShapHz");
     if (!wrap) return;
+    const shapSection = wrap.closest(".drawer__sect");
+    if (shapSection) shapSection.hidden = isCountyMode();
+    if (isCountyMode()) return;
     const m = STATE.activeModel;
     const h = STATE.activeHorizon;
     const MODEL_NAME = { m1: "Diagnostic", m2: "Influenceable" };
@@ -1310,7 +1534,7 @@
       return;
     }
 
-    const fips = STATE.pinnedTract && STATE.pinnedTract.f;
+    const fips = STATE.pinnedFeature && STATE.pinnedFeature.f;
     const entry = fips ? STATE.shap[fips] : null;
     const key = `${m}_${h}`;
     const list = entry && entry[key] ? entry[key] : null;
@@ -1490,11 +1714,11 @@
 
   function bindDrawerClose() {
     const btn = document.getElementById("drawerClose");
-    if (btn) btn.addEventListener("click", () => unpinTract());
+    if (btn) btn.addEventListener("click", () => unpinFeature());
     // ESC key closes the drawer
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && STATE.pinnedTract) {
-        unpinTract();
+      if (e.key === "Escape" && STATE.pinnedFeature) {
+        unpinFeature();
       }
     });
   }
@@ -1532,15 +1756,32 @@
         applyActive();
       });
     });
+
+    // Geography
+    document.querySelectorAll(".geo").forEach(b => {
+      b.addEventListener("click", () => {
+        const g = b.dataset.geo;
+        if (!g || g === STATE.geoMode) return;
+        STATE.geoMode = g;
+        document.querySelectorAll(".geo").forEach(x => {
+          x.classList.toggle("is-active", x.dataset.geo === g);
+          x.setAttribute("aria-selected", x.dataset.geo === g ? "true" : "false");
+        });
+        document.body.dataset.geo = g;
+        unpinFeature();
+        syncGeoLayers();
+        applyActive();
+      });
+    });
   }
 
   // Apply active (model, horizon) to the map and panels
   function applyActive() {
     document.getElementById("legendModelName").textContent =
       STATE.activeModel === "m1" ? "Diagnostic" : "Influenceable";
-    if (map && map.getLayer("tracts-fill")) {
-      map.setPaintProperty("tracts-fill", "fill-color", computeColorExpr());
-      map.setPaintProperty("tracts-fill", "fill-opacity", [
+    if (map && map.getLayer(activeFillLayerId())) {
+      map.setPaintProperty(activeFillLayerId(), "fill-color", computeColorExpr());
+      map.setPaintProperty(activeFillLayerId(), "fill-opacity", [
         "case",
         ["==", ["get", riskProp()], null], 0.18,
         0.92
@@ -1553,7 +1794,8 @@
     renderSliders();      // re-render so each slider shows ablation impact at active horizon
     renderMethodology();
     renderFocusPanel();   // refresh focus panel for new (model, horizon)
-    if (STATE.pinnedTract) renderDrawer();   // refresh drawer for new (model, horizon)
+    renderGeoCopy();
+    if (STATE.pinnedFeature) renderDrawer();   // refresh drawer for new (model, horizon)
   }
 
   function syncHorizonAffordances() {
@@ -1626,7 +1868,7 @@
     if (!STATE.states || !STATE.states.states) return;
     const m = STATE.activeModel;
     const h = STATE.activeHorizon;
-    const meanK = `mean_${m}_${h}`;
+    const meanK = geoMeanKey(m, h);
     const aucK  = `auc_${m}_${h}`;
 
     const states = STATE.states.states.filter(s => s[meanK] != null);
@@ -1670,9 +1912,10 @@
     const wrap = document.getElementById("natHisto");
     if (!wrap) return;
     wrap.innerHTML = "";
-    if (!STATE.states || !STATE.states.national_histogram) return;
+    if (!STATE.states) return;
     const key = `${STATE.activeModel}_${STATE.activeHorizon}`;
-    const hist = STATE.states.national_histogram[key];
+    const histStore = activeHistogramStore();
+    const hist = histStore ? histStore[key] : null;
     if (!hist) return;
     const max = Math.max(...hist.counts) || 1;
     hist.counts.forEach((c, i) => {
@@ -1805,8 +2048,8 @@
     if (STATE.rafId) return;
     STATE.rafId = requestAnimationFrame(() => {
       STATE.rafId = null;
-      if (map && map.getLayer("tracts-fill")) {
-        map.setPaintProperty("tracts-fill", "fill-color", computeColorExpr());
+      if (map && map.getLayer(activeFillLayerId())) {
+        map.setPaintProperty(activeFillLayerId(), "fill-color", computeColorExpr());
       }
       updateCounters();
     });
@@ -1862,7 +2105,7 @@
     const h = STATE.activeHorizon;
     const baseline = baselineMeanRisk(m, h);
     const shift = computeShift();
-    const N = 77036;
+    const N = activeFeatureCount();
     const baseHigh = N * baseline * 1.6;
     const scenarioHigh = N * Math.max(0, baseline + shift) * 1.6;
     const delta = scenarioHigh - baseHigh;
@@ -1873,12 +2116,12 @@
 
     cntUp.textContent = (delta > 0 ? "+" : "") + Math.round(Math.max(0,  delta)).toLocaleString();
     cntDn.textContent = (delta < 0 ? "−" : "") + Math.round(Math.max(0, -delta)).toLocaleString();
-    net.textContent = `net ${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta)).toLocaleString()} tracts · estimated national shift ${(shift*100 >= 0?"+":"")}${(shift*100).toFixed(2)} percentage points`;
+    net.textContent = `net ${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta)).toLocaleString()} ${activeGeoMeta().plural} · estimated national shift ${(shift*100 >= 0?"+":"")}${(shift*100).toFixed(2)} percentage points`;
   }
 
   function baselineMeanRisk(model, horizon) {
     if (!STATE.states || !STATE.states.states) return 0.04;
-    const k = `mean_${model}_${horizon}`;
+    const k = geoMeanKey(model, horizon);
     const vals = STATE.states.states.map(s => s[k]).filter(v => v != null);
     if (!vals.length) return 0.04;
     return vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -1909,8 +2152,8 @@
         const v = document.getElementById("sval_" + k);
         if (v) { v.textContent = "no change yet"; v.classList.remove("is-shifted"); }
       });
-      if (map && map.getLayer("tracts-fill")) {
-        map.setPaintProperty("tracts-fill", "fill-color", computeColorExpr());
+      if (map && map.getLayer(activeFillLayerId())) {
+        map.setPaintProperty(activeFillLayerId(), "fill-color", computeColorExpr());
       }
       syncMode();
     });
@@ -1980,11 +2223,6 @@
       `;
       wrap.appendChild(li);
     });
-  }
-
-  function setText(id, t) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = t;
   }
 
   function renderAblation() {

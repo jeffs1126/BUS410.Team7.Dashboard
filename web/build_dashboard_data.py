@@ -17,7 +17,9 @@ Inputs (all on disk; ROUND5 is bundled into the repo as round5-diagnostic/):
 
 Outputs (web/data/):
     tracts.geojson                  per tract: m1_h3, m2_h3, m1_h6, m2_h6 + ranks
-    state_stats.json                per-state mean risk + AUCs across all 4 (model, horizon)
+    counties.geojson                per county: weighted m1_h3, m2_h3, m1_h6, m2_h6 + ranks
+    county_stats.json               per-county drawer payload (top tracts + metadata)
+    state_stats.json                per-state tract/county summaries + national histograms
     state_bbox.json                 per-state bbox for fly-to
     ablation_h3.json, ablation_h6.json
     pruning_h3.json, pruning_h6.json
@@ -54,6 +56,7 @@ PREDS = {
 }
 
 SRC_GEO = ROUND5 / "web" / "data" / "tracts.geojson"
+COUNTY_GEO = ROUND5 / "web" / "data" / "counties.geojson"
 COUNTY_LOOKUP = ROUND5 / "web" / "data" / "_lookup" / "county_names.txt"
 
 # Search index inputs (downloaded ahead of build by the harness; if missing,
@@ -62,6 +65,8 @@ GAZ_PLACE_FILE = Path("/tmp/gaz_place/2020_Gaz_place_national.txt")
 PLACE_POP_FILE = Path("/tmp/place_pop.json")
 
 PANEL_PARQUET = ROUND7 / "data" / "processed" / "panel" / "tract_year_with_target_round7.parquet"
+ACS_POP_CSV = ROUND5 / "data" / "processed" / "acs" / "tract_year_h2020.csv"
+ACS_POP_CSV_FALLBACK = ROUND5 / "data" / "processed" / "acs" / "tract_year.csv"
 
 LEVER_FEATURES = [
     "distance_to_nearest_bank_branch",
@@ -134,6 +139,74 @@ def headline_metrics(preds: pd.DataFrame) -> dict:
         "std_ap":   round(float(np.std(per_fold_ap)),   4) if per_fold_ap else None,
         "n_folds":  len(per_fold_auc),
     }
+
+
+def load_latest_population() -> pd.DataFrame:
+    """Latest non-null tract population for county weighting."""
+    if not PANEL_PARQUET.exists():
+        print(f"  WARN: panel parquet missing: {PANEL_PARQUET}")
+    else:
+        try:
+            panel = pd.read_parquet(PANEL_PARQUET, columns=["tract_fips", "year", "population"])
+            panel = panel.dropna(subset=["population"]).copy()
+            if not panel.empty:
+                panel = panel.sort_values(["tract_fips", "year"], ascending=[True, False])
+                latest = panel.drop_duplicates(subset="tract_fips", keep="first").copy()
+                latest["population"] = pd.to_numeric(latest["population"], errors="coerce")
+                latest = latest.dropna(subset=["population"])
+                print(f"  population source: {PANEL_PARQUET}")
+                return latest[["tract_fips", "population"]]
+        except Exception as exc:
+            if "population" not in str(exc):
+                raise
+            print("  WARN: Round 7 panel has no population column; using Round 5 ACS population")
+
+    pop_csv = ACS_POP_CSV if ACS_POP_CSV.exists() else ACS_POP_CSV_FALLBACK
+    if not pop_csv.exists():
+        print(f"  WARN: no tract population source found: {ACS_POP_CSV}")
+        return pd.DataFrame(columns=["tract_fips", "population"])
+
+    acs = pd.read_csv(pop_csv, dtype={"tract_fips": str})
+    if "vintage" not in acs.columns or "population" not in acs.columns:
+        print(f"  WARN: population CSV missing required columns: {pop_csv}")
+        return pd.DataFrame(columns=["tract_fips", "population"])
+    acs = acs[["tract_fips", "vintage", "population"]].copy()
+    acs["tract_fips"] = acs["tract_fips"].astype(str).str.zfill(11)
+    acs["population"] = pd.to_numeric(acs["population"], errors="coerce")
+    acs = acs.dropna(subset=["population"])
+    if acs.empty:
+        return pd.DataFrame(columns=["tract_fips", "population"])
+    acs = acs.sort_values(["tract_fips", "vintage"], ascending=[True, False])
+    latest = acs.drop_duplicates(subset="tract_fips", keep="first").copy()
+    print(f"  population source: {pop_csv}")
+    return latest[["tract_fips", "population"]]
+
+
+def top_tracts_payload(sub: pd.DataFrame,
+                       county_names_lookup: dict[str, str],
+                       model_keys: list[tuple[str, int]],
+                       limit: int = 5) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {}
+    for (model, h) in model_keys:
+        col = f"risk_{model}_h{h}"
+        if col not in sub.columns:
+            continue
+        ranked = sub.dropna(subset=[col]).sort_values(col, ascending=False).head(limit)
+        out[f"{model}_h{h}"] = [
+            {
+                "f": str(r.tract_fips),
+                "cn": county_names_lookup.get(
+                    str(getattr(r, "county_fips", None) or r.tract_fips[:5]).zfill(5),
+                    "",
+                ),
+                "m1_h3": None if pd.isna(getattr(r, "risk_m1_h3", float("nan"))) else round(float(r.risk_m1_h3), 4),
+                "m1_h6": None if pd.isna(getattr(r, "risk_m1_h6", float("nan"))) else round(float(r.risk_m1_h6), 4),
+                "m2_h3": None if pd.isna(getattr(r, "risk_m2_h3", float("nan"))) else round(float(r.risk_m2_h3), 4),
+                "m2_h6": None if pd.isna(getattr(r, "risk_m2_h6", float("nan"))) else round(float(r.risk_m2_h6), 4),
+            }
+            for r in ranked.itertuples(index=False)
+        ]
+    return out
 
 
 # Hardcoded fallback list of major US cities (used if Census Gazetteer is missing).
@@ -273,6 +346,13 @@ def main() -> None:
     merged = merged[~merged["state_fips"].isin(TERRITORIES)].copy()
     print(f"  merged tracts (excl. territories): {len(merged):,}")
 
+    # ---- Attach latest tract population ----
+    print("\n[2b/7] Latest tract population…")
+    tract_pop = load_latest_population()
+    merged = merged.merge(tract_pop, on="tract_fips", how="left")
+    pop_cov = int(merged["population"].notna().sum())
+    print(f"  population coverage: {pop_cov:,} / {len(merged):,} tracts")
+
     # ---- Within-state percentile ranks ----
     print("\n[3/7] Within-state percentile ranks…")
     for (model, h) in PREDS.keys():
@@ -280,14 +360,95 @@ def main() -> None:
         if col in merged.columns:
             merged[f"rk_{model}_h{h}"] = merged.groupby("state")[col].rank(pct=True) * 100
 
+    # ---- County aggregates ----
+    print("\n[3b/7] County aggregates…")
+    county_names_lookup = load_county_names()
+    county_rows = []
+    county_details: dict[str, dict] = {}
+    fallback_counties: list[str] = []
+    model_keys = list(PREDS.keys())
+    for _, sub in merged.groupby("county_fips", dropna=False):
+        if sub.empty:
+            continue
+        tract0 = str(sub["tract_fips"].iloc[0])
+        cf5 = str(sub["county_fips"].iloc[0] if pd.notna(sub["county_fips"].iloc[0]) else tract0[:5]).zfill(5)
+        st = str(sub["state"].iloc[0])
+        rec = {
+            "cf": cf5,
+            "state": st,
+            "state_fips": str(sub["state_fips"].iloc[0]).zfill(2),
+            "cn": county_names_lookup.get(cf5, county_names_lookup.get(cf5[:5], "")),
+            "n_tracts": int(len(sub)),
+        }
+        weighted_population = sub.dropna(subset=["population"])["population"].sum()
+        rec["population"] = None if pd.isna(weighted_population) or weighted_population <= 0 else int(round(float(weighted_population)))
+        used_unweighted_fallback = False
+
+        for (model, h) in model_keys:
+            col = f"risk_{model}_h{h}"
+            if col not in sub.columns:
+                continue
+            valid = sub.dropna(subset=[col]).copy()
+            if valid.empty:
+                continue
+            weighted = valid.dropna(subset=["population"]).copy()
+            if not weighted.empty and float(weighted["population"].sum()) > 0:
+                value = np.average(weighted[col].to_numpy(dtype=float),
+                                   weights=weighted["population"].to_numpy(dtype=float))
+            else:
+                value = valid[col].mean()
+                used_unweighted_fallback = True
+            rec[f"risk_{model}_h{h}"] = float(value)
+
+        for (model, h) in model_keys:
+            rk_col = f"rk_{model}_h{h}"
+            src = sub.dropna(subset=[rk_col]) if rk_col in sub.columns else pd.DataFrame()
+            if src.empty:
+                continue
+            rec[rk_col] = float(src[rk_col].mean())
+
+        if used_unweighted_fallback:
+            fallback_counties.append(cf5)
+
+        top_tracts = top_tracts_payload(sub, county_names_lookup, model_keys)
+        county_details[cf5] = {
+            "cf": cf5,
+            "st": st,
+            "cn": rec["cn"],
+            "n_tracts": rec["n_tracts"],
+            "population": rec["population"],
+            "weighting": "unweighted_fallback" if used_unweighted_fallback else "population_weighted",
+            "top_tracts": top_tracts,
+        }
+        county_rows.append(rec)
+
+    county_df = pd.DataFrame(county_rows)
+    if county_df.empty:
+        raise SystemExit("County aggregation failed: no county rows built")
+    for (model, h) in model_keys:
+        risk_col = f"risk_{model}_h{h}"
+        if risk_col in county_df.columns:
+            county_df[f"rk_{model}_h{h}"] = county_df.groupby("state")[risk_col].rank(pct=True) * 100
+    print(f"  counties built: {len(county_df):,}")
+    if fallback_counties:
+        preview = ", ".join(fallback_counties[:12])
+        extra = "" if len(fallback_counties) <= 12 else f" (+{len(fallback_counties) - 12} more)"
+        print(f"  WARN: unweighted fallback for {len(fallback_counties):,} counties: {preview}{extra}")
+
     # ---- Per-state stats ----
     print("\n[4/7] Per-state stats…")
-    county_names_lookup = load_county_names()
     state_rows = []
     for st, sub in merged.groupby("state"):
         if len(sub) < 5:
             continue
-        rec = {"state": st, "state_fips": sub["state_fips"].iloc[0], "n": int(len(sub))}
+        county_sub = county_df[county_df["state"] == st].copy()
+        rec = {
+            "state": st,
+            "state_fips": sub["state_fips"].iloc[0],
+            "n": int(len(sub)),
+            "n_tracts": int(len(sub)),
+            "n_counties": int(len(county_sub)),
+        }
         for (model, h) in PREDS.keys():
             col = f"risk_{model}_h{h}"
             ycol = f"ytrue_{model}_h{h}"
@@ -295,22 +456,28 @@ def main() -> None:
             if len(ssub) == 0:
                 continue
             rec[f"mean_{model}_h{h}"] = round(float(ssub[col].mean()), 4)
+            if not county_sub.empty and col in county_sub.columns:
+                cvals = county_sub[col].dropna()
+                if not cvals.empty:
+                    rec[f"county_mean_{model}_h{h}"] = round(float(cvals.mean()), 4)
             if ssub[ycol].nunique() > 1:
                 rec[f"auc_{model}_h{h}"] = round(float(roc_auc_score(ssub[ycol], ssub[col])), 4)
                 rec[f"ap_{model}_h{h}"]  = round(float(average_precision_score(ssub[ycol], ssub[col])), 4)
 
-        # Top-5 highest risk tracts in the state at active model/horizon (m1, h+3 by default).
-        # Emit a precomputed top-5 for *each* (model, horizon) so JS can pick.
-        top_per = {}
-        for (model, h) in PREDS.keys():
+        rec["top"] = top_tracts_payload(sub, county_names_lookup, model_keys)
+
+        top_counties = {}
+        for (model, h) in model_keys:
             col = f"risk_{model}_h{h}"
-            if col not in sub.columns:
+            if col not in county_sub.columns:
                 continue
-            ranked = sub.dropna(subset=[col]).sort_values(col, ascending=False).head(5)
-            top_per[f"{model}_h{h}"] = [
+            ranked = county_sub.dropna(subset=[col]).sort_values(col, ascending=False).head(5)
+            top_counties[f"{model}_h{h}"] = [
                 {
-                    "f": str(r.tract_fips),
-                    "cn": county_names_lookup.get(str(getattr(r, "county_fips", None) or r.tract_fips[:5]).zfill(5), ""),
+                    "cf": str(r.cf),
+                    "cn": r.cn,
+                    "n_tracts": int(r.n_tracts),
+                    "population": None if pd.isna(getattr(r, "population", np.nan)) else int(r.population),
                     "m1_h3": None if pd.isna(getattr(r, "risk_m1_h3", float("nan"))) else round(float(r.risk_m1_h3), 4),
                     "m1_h6": None if pd.isna(getattr(r, "risk_m1_h6", float("nan"))) else round(float(r.risk_m1_h6), 4),
                     "m2_h3": None if pd.isna(getattr(r, "risk_m2_h3", float("nan"))) else round(float(r.risk_m2_h3), 4),
@@ -318,26 +485,35 @@ def main() -> None:
                 }
                 for r in ranked.itertuples(index=False)
             ]
-        rec["top"] = top_per
+        rec["top_counties"] = top_counties
         state_rows.append(rec)
     state_rows.sort(key=lambda r: r["state"])
 
     # ---- National risk distribution per (model, horizon): 10-bin histogram ----
-    nat_hist = {}
+    nat_hist_tract = {}
+    nat_hist_county = {}
+    national_means = {"tract": {}, "county": {}}
     for (model, h) in PREDS.keys():
         col = f"risk_{model}_h{h}"
-        if col not in merged.columns:
-            continue
-        vals = merged[col].dropna().values
-        if len(vals) == 0:
-            continue
-        # Fixed bins 0..1 in deciles
         edges = np.linspace(0, 1, 11)
-        counts, _ = np.histogram(vals, bins=edges)
-        nat_hist[f"{model}_h{h}"] = {
-            "edges": [round(float(e), 2) for e in edges.tolist()],
-            "counts": [int(c) for c in counts.tolist()],
-        }
+        if col in merged.columns:
+            vals = merged[col].dropna().values
+            if len(vals):
+                counts, _ = np.histogram(vals, bins=edges)
+                nat_hist_tract[f"{model}_h{h}"] = {
+                    "edges": [round(float(e), 2) for e in edges.tolist()],
+                    "counts": [int(c) for c in counts.tolist()],
+                }
+                national_means["tract"][f"{model}_h{h}"] = round(float(np.mean(vals)), 4)
+        if col in county_df.columns:
+            cvals = county_df[col].dropna().values
+            if len(cvals):
+                counts, _ = np.histogram(cvals, bins=edges)
+                nat_hist_county[f"{model}_h{h}"] = {
+                    "edges": [round(float(e), 2) for e in edges.tolist()],
+                    "counts": [int(c) for c in counts.tolist()],
+                }
+                national_means["county"][f"{model}_h{h}"] = round(float(np.mean(cvals)), 4)
 
     # ---- National / fold averages per (model, horizon) ----
     headline = {}
@@ -349,7 +525,13 @@ def main() -> None:
         "model_names": {"m1": "Diagnostic", "m2": "Influenceable"},
         "horizons": list(HORIZONS),
         "horizon_labels": {3: "2027 forecast (h+3)", 6: "2030 scenario (h+6)"},
-        "national_histogram": nat_hist,
+        "feature_counts": {"tract": int(len(merged)), "county": int(len(county_df))},
+        "national_means_by_geo": national_means,
+        "national_histogram": nat_hist_tract,
+        "national_histogram_by_geo": {
+            "tract": nat_hist_tract,
+            "county": nat_hist_county,
+        },
     }
     with (DATA / "state_stats.json").open("w") as f:
         json.dump(state_stats, f, indent=2)
@@ -367,6 +549,7 @@ def main() -> None:
             "st": r.state,
             "cf": cf5,
             "cn": county_names.get(cf5, ""),
+            "population": None if pd.isna(getattr(r, "population", np.nan)) else int(round(float(r.population))),
         }
         for (model, h) in PREDS.keys():
             risk = getattr(r, f"risk_{model}_h{h}", None)
@@ -375,9 +558,12 @@ def main() -> None:
             props[f"{model}r_h{h}"] = None if pd.isna(rk)   else round(float(rk),   1)
         tract_props[fips] = props
 
-    if not SRC_GEO.exists():
+    tract_geo_source = SRC_GEO if SRC_GEO.exists() else DATA / "tracts.geojson"
+    if not tract_geo_source.exists():
         raise SystemExit(f"Tract geojson not found: {SRC_GEO}")
-    with SRC_GEO.open() as f:
+    if tract_geo_source != SRC_GEO:
+        print(f"  WARN: archived tract geojson missing; reusing {tract_geo_source}")
+    with tract_geo_source.open() as f:
         geo = json.load(f)
     out_features = []
     for feat in geo["features"]:
@@ -394,6 +580,49 @@ def main() -> None:
     with geo_out.open("w") as f:
         json.dump(out_geo, f, separators=(",", ":"))
     print(f"  → {geo_out} ({geo_out.stat().st_size/1e6:.1f} MB, {len(out_features):,} tracts)")
+
+    # ---- County properties + geojson ----
+    print("\n[5b/7] Building county properties + geojson…")
+    county_props: dict[str, dict] = {}
+    for r in county_df.itertuples(index=False):
+        props = {
+            "f": str(r.cf),
+            "st": r.state,
+            "cf": str(r.cf),
+            "cn": r.cn,
+            "n_tracts": int(r.n_tracts),
+            "population": None if pd.isna(getattr(r, "population", np.nan)) else int(r.population),
+        }
+        for (model, h) in model_keys:
+            risk = getattr(r, f"risk_{model}_h{h}", None)
+            rk = getattr(r, f"rk_{model}_h{h}", None)
+            props[f"{model}_h{h}"] = None if pd.isna(risk) else round(float(risk), 4)
+            props[f"{model}r_h{h}"] = None if pd.isna(rk) else round(float(rk), 1)
+        county_props[str(r.cf)] = props
+
+    if not COUNTY_GEO.exists():
+        raise SystemExit(f"County geojson not found: {COUNTY_GEO}")
+    with COUNTY_GEO.open() as f:
+        county_geo = json.load(f)
+    county_out_features = []
+    for feat in county_geo["features"]:
+        cf5 = str(feat.get("properties", {}).get("f") or "").zfill(5)
+        if not cf5 or cf5 not in county_props:
+            continue
+        county_out_features.append({
+            "type": "Feature",
+            "geometry": feat["geometry"],
+            "properties": county_props[cf5],
+        })
+    county_out = {"type": "FeatureCollection", "features": county_out_features}
+    county_geo_out = DATA / "counties.geojson"
+    with county_geo_out.open("w") as f:
+        json.dump(county_out, f, separators=(",", ":"))
+    print(f"  → {county_geo_out} ({county_geo_out.stat().st_size/1e6:.1f} MB, {len(county_out_features):,} counties)")
+
+    with (DATA / "county_stats.json").open("w") as f:
+        json.dump(county_details, f, separators=(",", ":"))
+    print(f"  → {DATA/'county_stats.json'} ({len(county_details):,} counties)")
 
     # ---- bbox per state ----
     print("\n[6/7] State bbox…")
@@ -419,10 +648,9 @@ def main() -> None:
         return None if minx is math.inf else [minx, miny, maxx, maxy]
 
     state_bbox: dict[str, list[float]] = {}
-    county_bbox: dict[str, list[float]] = {}   # keyed by 5-digit cf
+    county_bbox: dict[str, list[float]] = {}
     for feat in out_features:
         st = feat["properties"]["st"]
-        cf = feat["properties"].get("cf")
         bb = bbox_of(feat["geometry"])
         if bb is None:
             continue
@@ -432,13 +660,11 @@ def main() -> None:
             cur = state_bbox[st]
             state_bbox[st] = [min(cur[0], bb[0]), min(cur[1], bb[1]),
                               max(cur[2], bb[2]), max(cur[3], bb[3])]
-        if cf:
-            if cf not in county_bbox:
-                county_bbox[cf] = bb[:]
-            else:
-                cur = county_bbox[cf]
-                county_bbox[cf] = [min(cur[0], bb[0]), min(cur[1], bb[1]),
-                                   max(cur[2], bb[2]), max(cur[3], bb[3])]
+    for feat in county_out_features:
+        cf = feat["properties"].get("cf")
+        bb = bbox_of(feat["geometry"])
+        if cf and bb is not None:
+            county_bbox[cf] = bb[:]
     state_bbox = {st: [round(v, 4) for v in bb] for st, bb in state_bbox.items()}
     county_bbox = {cf: [round(v, 4) for v in bb] for cf, bb in county_bbox.items()}
     with (DATA / "state_bbox.json").open("w") as f:

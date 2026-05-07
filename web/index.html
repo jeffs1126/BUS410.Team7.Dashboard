@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Two-Layer Credit-Desert Risk · Round 7</title>
-<meta name="description" content="An interactive forecast of small-business credit-desert risk across 77,000 U.S. census tracts. Two models, two horizons, one map.">
+<meta name="description" content="An interactive forecast of small-business credit-desert risk across U.S. counties and census tracts. Two models, two horizons, one map.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,7 +22,7 @@
   <!-- HERO: full-bleed map. -->
   <section class="hero" aria-label="Interactive credit-desert risk map">
 
-    <div id="map" class="map" role="application" aria-label="Choropleth map of U.S. tracts colored by risk"></div>
+    <div id="map" class="map" role="application" aria-label="Choropleth map of U.S. counties or census tracts colored by risk"></div>
 
     <!-- Floating overlay: title (top-left) -->
     <header class="ovl ovl--title">
@@ -31,7 +31,7 @@
         <span class="title__line">Two-Layer</span>
         <span class="title__line">Credit-Desert Risk.</span>
       </h1>
-      <p class="title__sub">A forecast across <span class="num">77,036</span> U.S. census tracts. Toggle the lens. Pick a horizon. Move the levers. Watch the map answer.</p>
+      <p class="title__sub">A forecast across <span class="num" id="titleGeoCount">3,235</span> U.S. <span id="titleGeoLabel">counties</span>. Toggle the lens. Pick a horizon. Change the geography. Move the levers. Watch the map answer.</p>
       <div class="ovl--horizonlabel mono" id="horizonLabel">Forecasting → 2027</div>
     </header>
 
@@ -70,11 +70,25 @@
           </button>
         </div>
       </div>
+
+      <div class="toggrp" role="tablist" aria-label="Choose geography">
+        <span class="toggrp__lbl kicker">Geography</span>
+        <div class="toggrp__pills">
+          <button class="geo is-active" data-geo="county" role="tab" aria-selected="true">
+            <span class="geo__num">Default</span>
+            <span class="geo__name">County</span>
+          </button>
+          <button class="geo" data-geo="tract" role="tab" aria-selected="false">
+            <span class="geo__num">Detail</span>
+            <span class="geo__name">Tract</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Floating overlay: metadata strip (bottom-left) -->
     <div class="ovl ovl--meta" aria-hidden="false">
-      <span class="meta__cell"><b class="meta__k">n</b> <span class="mono num">77,036</span> tracts</span>
+      <span class="meta__cell"><b class="meta__k">n</b> <span class="mono num" id="metaGeoCount">3,235</span> <span id="metaGeoLabel">counties</span></span>
       <span class="meta__sep">·</span>
       <span class="meta__cell">2009<span class="meta__d">→</span>2024 panel</span>
       <span class="meta__sep">·</span>
@@ -141,8 +155,8 @@
         <div class="kicker rail__sect rail__sect--mid">Where the lens looks weakest</div>
         <ol class="topstates topstates--auc" id="weakStates"></ol>
         <div class="kicker rail__sect rail__sect--mid">National risk distribution</div>
-        <p class="rail__hint" id="histCaption">Tracts per risk decile · active model × horizon. Long left tail = most tracts read low risk; the rightmost bar is the high-risk shoulder.</p>
-        <div class="histo" id="natHisto" aria-label="Histogram of tract risk by decile"></div>
+        <p class="rail__hint" id="histCaption">Counties per risk decile · active model × horizon. Long left tail = most counties read low risk; the rightmost bar is the high-risk shoulder.</p>
+        <div class="histo" id="natHisto" aria-label="Histogram of county risk by decile"></div>
       </div>
 
       <!-- Mode: FOCUS (when a state is clicked) -->
@@ -152,7 +166,7 @@
             <div>
               <span class="kicker">Focused state</span>
               <h3 class="focus__name" id="focusName">–</h3>
-              <div class="focus__meta mono" id="focusMeta">– tracts · – AUC</div>
+              <div class="focus__meta mono" id="focusMeta">– areas · – AUC</div>
             </div>
             <button class="focus__close" id="focusClose" type="button" aria-label="Clear state focus">Show all states</button>
           </div>
@@ -161,13 +175,13 @@
         <div class="kicker rail__sect">Mean risk · model × horizon</div>
         <div class="focusgrid" id="focusGrid"></div>
 
-        <div class="kicker rail__sect rail__sect--mid">Top 5 tracts in state</div>
+        <div class="kicker rail__sect rail__sect--mid" id="focusTopLabel">Top 5 counties in state</div>
         <ol class="toptracts" id="focusTopTracts"></ol>
       </div>
 
       <!-- Mode: SCENARIO (when sliders moved) -->
       <div class="rail__mode" id="modeScenario" hidden>
-        <div class="kicker rail__sect">Tracts that crossed the high-risk line</div>
+        <div class="kicker rail__sect" id="scenarioTitle">Counties that crossed the high-risk line</div>
         <div class="counters">
           <div class="counter">
             <div class="counter__v" id="cntUp">+0</div>
@@ -216,17 +230,17 @@
       <article class="guide__card" data-accordion>
         <div class="guide__num">02</div>
         <h3 class="guide__h">The map</h3>
-        <p class="accordion__hook">Tract color encodes predicted risk at the active horizon; click any state to focus and the peripheral tints fade so you read one choropleth at a time.</p>
+        <p class="accordion__hook">County color encodes predicted risk by default, with tract mode available when you need finer detail; click any state to focus and the peripheral tints fade so you read one choropleth at a time.</p>
         <button class="accordion__toggle" aria-expanded="false"><i class="accordion__chevron">&#9658;</i> Details</button>
         <div class="accordion__body">
-          <p>Tract color = predicted risk for the active model and horizon, ramped from ink to mustard (Diagnostic) or chartreuse (Influenceable). The faint hued tints across the country are state boundaries; peripheral context, not a fourth dimension. <b>Click any state to focus.</b></p>
+          <p>County color = predicted risk for the active model and horizon by default; switch to tract mode for neighborhood detail. The ramp still runs from ink to mustard (Diagnostic) or chartreuse (Influenceable). The faint hued tints across the country are state boundaries; peripheral context, not a fourth dimension. <b>Click any state to focus.</b></p>
         </div>
       </article>
 
       <article class="guide__card" data-accordion>
         <div class="guide__num">03</div>
         <h3 class="guide__h">The right rail</h3>
-        <p class="accordion__hook">National performance metrics and top states by mean risk live here; click a state to swap in a tract-level detail panel.</p>
+        <p class="accordion__hook">National performance metrics and top states by mean risk live here; click a state to swap in a geography-specific detail panel.</p>
         <button class="accordion__toggle" aria-expanded="false"><i class="accordion__chevron">&#9658;</i> Details</button>
         <div class="accordion__body">
           <p>National AUC and average precision up top. Below: top states by mean risk and where the lens looks weakest. Click a state to swap this panel for a detail view of that state. The tint vanishes for the focused state, so you read its choropleth clean.</p>
@@ -246,10 +260,10 @@
       <article class="guide__card" data-accordion>
         <div class="guide__num">05</div>
         <h3 class="guide__h">What to look for</h3>
-        <p class="accordion__hook">The gap between Diagnostic and Influenceable scores is the gap between structural disadvantage and things you can fund; tracts where that gap is large are the hardest to reach.</p>
+        <p class="accordion__hook">The gap between Diagnostic and Influenceable scores is the gap between structural disadvantage and things you can fund; counties or tracts where that gap is large are the hardest to reach.</p>
         <button class="accordion__toggle" aria-expanded="false"><i class="accordion__chevron">&#9658;</i> Details</button>
         <div class="accordion__body">
-          <p>Switch Diagnostic ↔ Influenceable with a tract hovered. Same place, different lens. The gap is the gap between &ldquo;structural disadvantage&rdquo; and &ldquo;things you could fund.&rdquo; If a tract reads high on Diagnostic but lower on Influenceable, the levers we have don&rsquo;t reach it.</p>
+          <p>Switch Diagnostic ↔ Influenceable with an area hovered. Same place, different lens. The gap is the gap between &ldquo;structural disadvantage&rdquo; and &ldquo;things you could fund.&rdquo; If a county reads high on Diagnostic but lower on Influenceable, the levers we have don&rsquo;t reach it; tract mode lets you inspect the neighborhoods inside it.</p>
         </div>
       </article>
 
@@ -393,29 +407,28 @@
 
 </main>
 
-<!-- Tract-detail drawer (slides in from left when a tract is pinned) -->
-<aside id="drawer" class="drawer" hidden aria-hidden="true" aria-label="Tract detail">
+<!-- Geography detail drawer (slides in from left when a county or tract is pinned) -->
+<aside id="drawer" class="drawer" hidden aria-hidden="true" aria-label="Geography detail">
   <div class="drawer__inner">
     <header class="drawer__head">
       <div class="drawer__headtop">
-        <span class="kicker drawer__kicker">Tract detail</span>
-        <button id="drawerClose" class="drawer__close" type="button" aria-label="Close tract detail">close</button>
+        <span class="kicker drawer__kicker" id="drawerKicker">County detail</span>
+        <button id="drawerClose" class="drawer__close" type="button" aria-label="Close geography detail">close</button>
       </div>
       <div class="drawer__fips mono num" id="drawerFips">–</div>
       <div class="drawer__sub" id="drawerSub">–</div>
       <div class="drawer__meta mono" id="drawerMeta" hidden></div>
-      <p class="drawer__intro">
-        One U.S. census tract, roughly a neighborhood of 4,000 people.
-        Every prediction below estimates the chance this neighborhood becomes
-        a small-business credit desert (the bottom 10% of bank-lender count
-        nationally) by the year shown.
+      <p class="drawer__intro" id="drawerIntro">
+        One U.S. county, shown as a population-weighted rollup of the tracts inside it.
+        Every prediction below estimates the chance this geography becomes
+        a small-business credit desert by the year shown.
       </p>
     </header>
 
     <div class="drawer__rule"></div>
 
     <section class="drawer__sect">
-      <div class="kicker drawer__sect-h">Forecasts for this neighborhood</div>
+      <div class="kicker drawer__sect-h" id="drawerForecastLabel">Forecasts for this county</div>
       <p class="drawer__hint">
         Two lenses, two horizons. The <em>Diagnostic</em> lens uses every
         signal available, including ones you can't change (race, income,
@@ -425,6 +438,12 @@
         currently shown on the map.
       </p>
       <div class="drawer__grid" id="drawerGrid"></div>
+    </section>
+
+    <section id="drawerCountyTopWrap" class="drawer__sect" hidden>
+      <div class="kicker drawer__sect-h">Top tracts inside this county</div>
+      <p class="drawer__hint">Highest-risk tracts at the active model and horizon. Use tract mode to inspect any one of them directly.</p>
+      <ol class="toptracts" id="drawerCountyTopTracts"></ol>
     </section>
 
     <section id="drawerDivergence" class="drawer__sect divergence" hidden>
