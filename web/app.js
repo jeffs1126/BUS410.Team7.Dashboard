@@ -450,22 +450,6 @@
     },
   };
 
-  // Even-distributed hues for state-tint overlay. Adjacency is good enough
-  // since adjacent states will be ~7° apart in hue around the wheel.
-  const STATE_TINT = (() => {
-    const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI",
-                    "ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN",
-                    "MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH",
-                    "OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA",
-                    "WV","WI","WY"];
-    const out = {};
-    STATES.forEach((st, i) => {
-      const hue = (i / STATES.length) * 360;
-      out[st] = `hsl(${hue.toFixed(1)}, 50%, 60%)`;
-    });
-    return out;
-  })();
-  const STATE_TINT_OPACITY = 0.22; // tested over dark navy + mustard/chartreuse
 
 
   // ---------------------------------------------------------------------
@@ -590,16 +574,17 @@
     ];
   };
 
-  // Tint opacity expression: 0 for focused state, baseline for everyone else.
-  const tintOpacityExpr = () => {
-    if (!STATE.focusedState) {
-      return STATE_TINT_OPACITY;
-    }
-    return [
-      "case",
-      ["==", ["get", "st"], STATE.focusedState], 0,
-      STATE_TINT_OPACITY,
-    ];
+  // State-border paint expressions — thicker/brighter on the focused state.
+  const stateBordersOpacity = () => {
+    const base = ["interpolate", ["linear"], ["zoom"], 3, 0.35, 5, 0.45, 8, 0.55, 10, 0.65];
+    if (!STATE.focusedState) return base;
+    const dim  = ["interpolate", ["linear"], ["zoom"], 3, 0.25, 5, 0.30, 8, 0.35, 10, 0.40];
+    return ["case", ["==", ["get", "st"], STATE.focusedState], 0.95, dim];
+  };
+  const stateBordersWidth = () => {
+    const base = ["interpolate", ["linear"], ["zoom"], 3, 0.6, 6, 1.0, 9, 1.4, 12, 1.8];
+    if (!STATE.focusedState) return base;
+    return ["case", ["==", ["get", "st"], STATE.focusedState], 2.4, base];
   };
 
   // ---------------------------------------------------------------------
@@ -1319,6 +1304,24 @@
         },
       });
 
+      map.addSource("states", {
+        type: "geojson",
+        data: "data/states.geojson",
+        generateId: false,
+        tolerance: 0.5,
+      });
+      map.addLayer({
+        id: "state-borders",
+        type: "line",
+        source: "states",
+        paint: {
+          "line-color": "#e8edf2",
+          "line-opacity": stateBordersOpacity(),
+          "line-width": stateBordersWidth(),
+          "line-blur": 0.3,
+        },
+      });
+
       syncGeoLayers();
       ensureLayerInteractions("counties-fill", "counties-outline-hover");
       hideMapLoading();
@@ -1351,22 +1354,6 @@
         ],
         "fill-opacity-transition": { duration: 600, delay: 0 },
         "fill-color-transition": { duration: REDUCED ? 0 : 500, delay: 0 },
-      },
-    });
-
-    const stateTintMatch = ["match", ["get", "st"]];
-    Object.entries(STATE_TINT).forEach(([st, color]) => {
-      stateTintMatch.push(st, color);
-    });
-    stateTintMatch.push("hsl(0, 0%, 50%)");
-    map.addLayer({
-      id: "state-tint-overlay",
-      type: "fill",
-      source: "tracts",
-      paint: {
-        "fill-color": stateTintMatch,
-        "fill-opacity": tintOpacityExpr(),
-        "fill-opacity-transition": { duration: 350, delay: 0 },
       },
     });
 
@@ -1421,6 +1408,7 @@
 
     STATE.tractLayersReady = true;
     ensureLayerInteractions("tracts-fill", "tracts-outline-hover");
+    syncGeoLayers();
 
     map.on('sourcedata', function onTractSource(e) {
       if (e.sourceId === 'tracts' && e.isSourceLoaded) {
@@ -1445,7 +1433,6 @@
       ["tracts-outline-hover", tractVis],
       ["tracts-outline-pinned", tractVis],
       ["tracts-edge", tractVis],
-      ["state-tint-overlay", tractVis],
     ].forEach(([id, visibility]) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visibility);
     });
@@ -1491,7 +1478,7 @@
       document.getElementById("tipFips").textContent = p.f || "–";
       document.getElementById("tipCounty").textContent = p.cn || "–";
       const chip = document.getElementById("tipChip");
-      if (chip) chip.style.background = STATE_TINT[p.st] || "hsl(0, 0%, 50%)";
+      if (chip) chip.style.background = "#1c2a34";
 
       // Active row vs other row
       const active = STATE.activeModel;
@@ -1586,8 +1573,9 @@
 
   function setFocusedState(st) {
     STATE.focusedState = st || null;
-    if (map && map.getLayer("state-tint-overlay")) {
-      map.setPaintProperty("state-tint-overlay", "fill-opacity", tintOpacityExpr());
+    if (map && map.getLayer("state-borders")) {
+      map.setPaintProperty("state-borders", "line-opacity", stateBordersOpacity());
+      map.setPaintProperty("state-borders", "line-width", stateBordersWidth());
     }
     renderFocusPanel();
   }
@@ -2924,7 +2912,7 @@
       document.body.classList.remove('is-switching');
       unpinFeature();
       if (map.getSource('tracts')) {
-        ['tracts-fill', 'state-tint-overlay', 'tracts-outline-hover', 'tracts-outline-pinned', 'tracts-edge'].forEach(id => {
+        ['tracts-fill', 'tracts-outline-hover', 'tracts-outline-pinned', 'tracts-edge'].forEach(id => {
           if (map.getLayer(id)) map.removeLayer(id);
         });
         map.removeSource('tracts');
