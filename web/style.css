@@ -1398,6 +1398,33 @@ input[type="range"].slider__rng:focus-visible::-webkit-slider-thumb {
   max-width: 60ch;
 }
 
+/* Methodology horizon switcher — sticky bar above the section list */
+.meth__horizonSwitch {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--rule);
+  padding: var(--s-3) 0;
+  margin: 0 calc(-1 * max(var(--s-7), 6vw)) var(--s-7);
+  padding-left: max(var(--s-7), 6vw);
+  padding-right: max(var(--s-7), 6vw);
+}
+.meth__horizonSwitch-lbl {
+  color: var(--tx-3);
+  flex-shrink: 0;
+}
+.meth__horizonSwitch-hint {
+  font-family: var(--ff-mono);
+  font-size: var(--t-xs);
+  color: var(--tx-4);
+  font-variation-settings: "MONO" 1, "CASL" 0.85;
+  margin-left: auto;
+}
+
 .meth__sec {
   display: grid;
   grid-template-columns: 64px 1fr 1.05fr;
@@ -2117,6 +2144,8 @@ body.is-feature-dict-open {
   .meth__sec { grid-template-columns: 1fr; gap: var(--s-5); }
   .meth__num { color: var(--m2); font-size: 1rem; }
   .meth { padding: var(--s-7) var(--s-5); }
+  .meth__horizonSwitch { flex-wrap: wrap; gap: var(--s-2); }
+  .meth__horizonSwitch-hint { margin-left: 0; }
 }
 
 @media (max-width: 640px) {

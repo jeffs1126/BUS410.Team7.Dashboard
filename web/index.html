@@ -322,6 +322,24 @@
           levers that mattered, the COVID break, and what we still can't see.</p>
       </header>
 
+      <div class="meth__horizonSwitch" role="group" aria-label="Methodology view horizon">
+        <span class="meth__horizonSwitch-lbl kicker">Methodology view</span>
+        <div class="toggrp">
+          <!-- JS: update aria-pressed on click -->
+          <div class="toggrp__pills">
+            <button class="horizon is-active" data-meth-horizon="h3" type="button" aria-pressed="true">
+              <span class="horizon__num">3 yrs</span>
+              <span class="horizon__name">2027 forecast</span>
+            </button>
+            <button class="horizon" data-meth-horizon="h6" type="button" aria-pressed="false">
+              <span class="horizon__num">6 yrs</span>
+              <span class="horizon__name">2030 scenario</span>
+            </button>
+          </div>
+        </div>
+        <span class="meth__horizonSwitch-hint mono">independent of map</span>
+      </div>
+
       <article class="meth__sec meth__sec--lead" data-accordion>
         <div class="meth__num">00</div>
         <div class="meth__body">

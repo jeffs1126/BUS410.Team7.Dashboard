@@ -1,11 +1,11 @@
 # Graph Report - 410DB  (2026-05-07)
 
 ## Corpus Check
-- 54 files · ~1,898,013 words
+- 54 files · ~1,898,179 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 484 nodes · 710 edges · 79 communities detected
+- 485 nodes · 711 edges · 79 communities detected
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 10 edges (avg confidence: 0.77)
 - Token cost: 0 input · 0 output
 
@@ -125,7 +125,7 @@
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.06
+Cohesion: 0.05
 Nodes (77): activeFeatureCount(), activeFillLayerId(), activeGeoMeta(), activeHistogramStore(), activeHoverLayerId(), activeLeversForNote(), activePinnedLayerId(), activeStateTopList() (+69 more)
 
 ### Community 1 - "Community 1"
@@ -532,7 +532,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **What connects `Per tract, take the most-recent (year, fold) calibrated probability.`, `Mean across folds — the canonical AUC/AP for this project.`, `Latest non-null tract population for county weighting.` to the rest of the system?**
   _85 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.08 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**

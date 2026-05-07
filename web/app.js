@@ -99,6 +99,8 @@
     geoMode: "county",            // "county" or "tract"
     activeModel: "m1",
     activeHorizon: "h3",          // "h3" or "h6"
+    methHorizon: "h3",            // independent horizon for the methodology viz panels
+    methHorizonLocked: false,     // true after first user interaction with the meth switcher
     focusedState: null,           // state abbreviation, or null
     sliderShifts: {},             // key → z-score shift
     feat: null,                   // feature_stats.json (flat: { key: {...} })
@@ -2362,18 +2364,44 @@
       });
     });
 
-    // Horizon
-    document.querySelectorAll(".horizon").forEach(b => {
+    // Horizon (map) — scoped to [data-horizon] to avoid picking up the meth switcher
+    document.querySelectorAll(".horizon[data-horizon]").forEach(b => {
       b.addEventListener("click", () => {
         const h = b.dataset.horizon;
         if (h === STATE.activeHorizon) return;
-        document.querySelectorAll(".horizon").forEach(x => {
+        document.querySelectorAll(".horizon[data-horizon]").forEach(x => {
           x.classList.toggle("is-active", x.dataset.horizon === h);
           x.setAttribute("aria-pressed", x.dataset.horizon === h ? "true" : "false");
         });
         STATE.activeHorizon = h;
         document.body.dataset.horizon = h;
+        // Keep meth switcher in sync until user has taken manual control
+        if (!STATE.methHorizonLocked) {
+          STATE.methHorizon = h;
+          document.querySelectorAll(".horizon[data-meth-horizon]").forEach(x => {
+            const on = x.dataset.methHorizon === h;
+            x.classList.toggle("is-active", on);
+            x.setAttribute("aria-pressed", String(on));
+          });
+          renderMethodology();
+        }
         applyActive();
+      });
+    });
+
+    // Methodology horizon switcher — independent from the map
+    document.querySelectorAll(".horizon[data-meth-horizon]").forEach(b => {
+      b.addEventListener("click", () => {
+        const h = b.dataset.methHorizon;
+        if (h === STATE.methHorizon) return;
+        STATE.methHorizon = h;
+        STATE.methHorizonLocked = true;
+        document.querySelectorAll(".horizon[data-meth-horizon]").forEach(x => {
+          const on = x.dataset.methHorizon === h;
+          x.classList.toggle("is-active", on);
+          x.setAttribute("aria-pressed", String(on));
+        });
+        renderMethodology();
       });
     });
 
@@ -2794,7 +2822,7 @@
   function renderMethodology() {
     if (!STATE.states) return;
     const head = STATE.states.headline || {};
-    const h = STATE.activeHorizon;
+    const h = STATE.methHorizon;
 
     // Section 0 — horizon comparison KV
     const t_h3auc = document.getElementById("t_h3auc");
@@ -2831,7 +2859,7 @@
     const wrap = document.getElementById("topFeats");
     if (!wrap) return;
     wrap.innerHTML = "";
-    const pr = STATE.pruning && STATE.pruning[STATE.activeHorizon];
+    const pr = STATE.pruning && STATE.pruning[STATE.methHorizon];
     if (!pr || !pr.ranking) {
       wrap.innerHTML = `<li class="topfeat" style="grid-template-columns:1fr"><span class="toptract__nm">Top-features data pending.</span></li>`;
       return;
@@ -2859,7 +2887,7 @@
     if (!wrap) return;
     wrap.innerHTML = "";
 
-    const abl = STATE.abl[STATE.activeHorizon];
+    const abl = STATE.abl[STATE.methHorizon];
     if (!abl || !abl.levers) {
       wrap.innerHTML = `
         <div class="ablempty">
@@ -2916,7 +2944,7 @@
     const wrap = document.getElementById("regimeRow");
     if (!wrap) return;
     wrap.innerHTML = "";
-    const reg = STATE.regime[STATE.activeHorizon];
+    const reg = STATE.regime[STATE.methHorizon];
     if (!reg) {
       wrap.innerHTML = `<div class="regime"><div class="regime__head"><span class="regime__lbl">COVID-split data pending</span></div></div>`;
       return;
