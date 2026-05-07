@@ -113,6 +113,8 @@
     regime: { h3: null, h6: null },
     rafId: null,
     tractLayersReady: false,
+    tractSourceReady: false,
+    switching: false,
     pinnedFeature: null,          // active geography properties object (or null)
     shap: null,                   // shap_top.json (lazily loaded)
     shapLoading: false,
@@ -638,6 +640,7 @@
     renderSliders();
     renderMethodology();
     bindReset();
+    bindMapReload();
     bindFocusClose();
     bindDrawerClose();
     syncHorizonAffordances();
@@ -1229,12 +1232,16 @@
 
       syncGeoLayers();
       ensureLayerInteractions("counties-fill", "counties-outline-hover");
-      document.getElementById('map-loading')?.remove();
+      const _lo = document.getElementById('map-loading');
+      if (_lo) _lo.style.display = 'none';
     });
   }
 
   function ensureTractLayers() {
     if (!map || STATE.tractLayersReady) return;
+
+    const _tlo = document.getElementById('map-loading');
+    if (_tlo) { _tlo.querySelector('span').textContent = 'Loading census tracts…'; _tlo.style.display = ''; }
 
     map.addSource("tracts", {
       type: "geojson",
@@ -1326,6 +1333,15 @@
 
     STATE.tractLayersReady = true;
     ensureLayerInteractions("tracts-fill", "tracts-outline-hover");
+
+    map.on('sourcedata', function onTractSource(e) {
+      if (e.sourceId === 'tracts' && e.isSourceLoaded) {
+        map.off('sourcedata', onTractSource);
+        STATE.tractSourceReady = true;
+        const lo = document.getElementById('map-loading');
+        if (lo) lo.style.display = 'none';
+      }
+    });
   }
 
   function syncGeoLayers() {
@@ -2346,6 +2362,9 @@
       b.addEventListener("click", () => {
         const g = b.dataset.geo;
         if (!g || g === STATE.geoMode) return;
+        if (STATE.switching) return;
+        STATE.switching = true;
+        document.body.classList.add('is-switching');
         STATE.geoMode = g;
         document.querySelectorAll(".geo").forEach(x => {
           x.classList.toggle("is-active", x.dataset.geo === g);
@@ -2355,6 +2374,10 @@
         unpinFeature();
         syncGeoLayers();
         applyActive();
+        map.once('idle', () => {
+          STATE.switching = false;
+          document.body.classList.remove('is-switching');
+        });
       });
     });
   }
@@ -2716,6 +2739,32 @@
       }
       refreshScenarioDrawer();
       syncMode();
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // MAP RELOAD
+  // ---------------------------------------------------------------------
+  function bindMapReload() {
+    const btn = document.getElementById('reloadMapBtn');
+    if (!btn || !map) return;
+    btn.addEventListener('click', () => {
+      const lo = document.getElementById('map-loading');
+      if (lo) { lo.querySelector('span').textContent = 'Reloading map…'; lo.style.display = ''; }
+      STATE.switching = false;
+      document.body.classList.remove('is-switching');
+      unpinFeature();
+      if (map.getSource('tracts')) {
+        ['tracts-fill', 'state-tint-overlay', 'tracts-outline-hover', 'tracts-outline-pinned', 'tracts-edge'].forEach(id => {
+          if (map.getLayer(id)) map.removeLayer(id);
+        });
+        map.removeSource('tracts');
+      }
+      STATE.tractLayersReady = false;
+      STATE.tractSourceReady = false;
+      syncGeoLayers();
+      applyActive();
+      map.once('idle', () => { if (lo) lo.style.display = 'none'; });
     });
   }
 

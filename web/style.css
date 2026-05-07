@@ -324,9 +324,22 @@ body.is-drawer-open .ovl--title {
 }
 
 /* Metadata strip */
-.ovl--meta {
+.ovl--bl {
+  position: absolute;
   bottom: var(--s-5);
   left: var(--s-6);
+  z-index: 5;
+  display: flex;
+  gap: var(--s-3);
+  align-items: flex-end;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.35s cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+body.is-drawer-open .ovl--bl {
+  transform: translate3d(480px, 0, 0);
+}
+.ovl--meta {
+  position: static;
   display: flex; gap: var(--s-3); align-items: baseline;
   font-family: var(--ff-mono);
   font-size: 0.6875rem;
@@ -341,12 +354,28 @@ body.is-drawer-open .ovl--title {
   padding: 8px 14px;
   letter-spacing: 0.02em;
   flex-wrap: wrap;
-  transform: translate3d(0, 0, 0);
-  transition: transform 0.35s cubic-bezier(0.215, 0.61, 0.355, 1);
 }
-body.is-drawer-open .ovl--meta {
-  transform: translate3d(480px, 0, 0);
+.ovl--reload {
+  position: static;
+  pointer-events: auto;
+  font-family: var(--ff-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-variation-settings: "MONO" 1, "CASL" 0.85;
+  color: var(--tx-3);
+  background: oklch(0.15 0.020 240 / 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 8px 14px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 140ms ease, background 140ms ease;
 }
+.ovl--reload:hover { color: var(--tx); background: oklch(0.20 0.020 240 / 0.9); }
+body.is-switching .ovl--toggles .geo { opacity: 0.5; pointer-events: none; cursor: not-allowed; }
 .meta__cell .meta__k { color: var(--tx-4); font-weight: 500; margin-right: 2px; text-transform: uppercase; letter-spacing: 0.08em; }
 .meta__cell .num { color: var(--tx-2); font-weight: 600; font-family: var(--ff-disp); }
 .meta__sep { color: var(--tx-4); }
@@ -2084,7 +2113,7 @@ body.is-feature-dict-open {
   .ovl--toggles { top: auto; bottom: var(--s-4); right: var(--s-4); left: var(--s-4); align-items: stretch; }
   .ovl--toggles .toggrp { grid-template-columns: 1fr; gap: 4px; }
   .ovl--toggles .toggrp__lbl { text-align: left; }
-  .ovl--meta { display: none; }
+  .ovl--bl { display: none; }
   .ovl--legend { transform: scale(0.75); transform-origin: bottom right; }
   .map { height: 60vh; min-height: 360px; }
   .rail__model-name { font-size: 1.5rem; }

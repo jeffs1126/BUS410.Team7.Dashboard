@@ -97,7 +97,8 @@
         </div>
       </div>
 
-      <!-- Floating overlay: metadata strip (bottom-left) -->
+      <!-- Floating overlay: metadata strip + reload button (bottom-left group) -->
+      <div class="ovl--bl">
       <div class="ovl ovl--meta" aria-hidden="false">
         <span class="meta__cell"><b class="meta__k">n</b> <span class="mono num" id="metaGeoCount">3,235</span> <span
             id="metaGeoLabel">counties</span></span>
@@ -107,6 +108,8 @@
         <span class="meta__cell">8 time-split tests, no leakage</span>
         <span class="meta__sep">·</span>
         <span class="meta__cell" id="metaHorizon">2027 forecast · trained on data through 2021 · predicts 2024</span>
+      </div>
+      <button class="ovl ovl--reload" id="reloadMapBtn" type="button" aria-label="Reload map">Reload map</button>
       </div>
 
       <!-- Floating overlay: legend (bottom-right) -->
