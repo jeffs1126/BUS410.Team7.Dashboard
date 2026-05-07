@@ -1091,7 +1091,7 @@
       map.setFilter(activePinnedLayerId(), ["==", ["get", "f"], p.f || "__none__"]);
     }
     openDrawer();
-    renderDrawer();
+    refreshScenarioDrawer();
     if (!isCountyMode()) ensureShap();   // lazy-load SHAP attribution on first tract pin
   }
 
@@ -1296,6 +1296,12 @@
     }
 
     STATE.scenarioActiveLevers = activeLeversForNote();
+  }
+
+  function refreshScenarioDrawer() {
+    if (!STATE.pinnedFeature) return;
+    applyScenarioToDrawer();
+    renderDrawer();
   }
 
   function renderDrawer() {
@@ -1795,7 +1801,7 @@
     renderMethodology();
     renderFocusPanel();   // refresh focus panel for new (model, horizon)
     renderGeoCopy();
-    if (STATE.pinnedFeature) renderDrawer();   // refresh drawer for new (model, horizon)
+    refreshScenarioDrawer();   // refresh drawer for new (model, horizon)
   }
 
   function syncHorizonAffordances() {
@@ -2039,6 +2045,7 @@
     }
 
     if (!skipRecolor) {
+      refreshScenarioDrawer();
       scheduleRecolor();
       syncMode();
     }
@@ -2155,6 +2162,7 @@
       if (map && map.getLayer(activeFillLayerId())) {
         map.setPaintProperty(activeFillLayerId(), "fill-color", computeColorExpr());
       }
+      refreshScenarioDrawer();
       syncMode();
     });
   }

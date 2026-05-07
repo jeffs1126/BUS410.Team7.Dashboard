@@ -172,36 +172,36 @@
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L106",
-      "id": "build_dashboard_data_rationale_106",
       "community": 6,
-      "norm_label": "per tract, take the most-recent (year, fold) calibrated probability."
+      "norm_label": "per tract, take the most-recent (year, fold) calibrated probability.",
+      "id": "build_dashboard_data_rationale_106"
     },
     {
       "label": "Mean across folds \u2014 the canonical AUC/AP for this project.",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L128",
-      "id": "build_dashboard_data_rationale_128",
       "community": 6,
-      "norm_label": "mean across folds \u2014 the canonical auc/ap for this project."
+      "norm_label": "mean across folds \u2014 the canonical auc/ap for this project.",
+      "id": "build_dashboard_data_rationale_128"
     },
     {
       "label": "Latest non-null tract population for county weighting.",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L145",
-      "id": "build_dashboard_data_rationale_145",
       "community": 6,
-      "norm_label": "latest non-null tract population for county weighting."
+      "norm_label": "latest non-null tract population for county weighting.",
+      "id": "build_dashboard_data_rationale_145"
     },
     {
       "label": "Build city search index from Census Gazetteer + decennial place-pop API.     Fal",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L249",
-      "id": "build_dashboard_data_rationale_249",
       "community": 6,
-      "norm_label": "build city search index from census gazetteer + decennial place-pop api.     fal"
+      "norm_label": "build city search index from census gazetteer + decennial place-pop api.     fal",
+      "id": "build_dashboard_data_rationale_249"
     },
     {
       "label": "app.js",
