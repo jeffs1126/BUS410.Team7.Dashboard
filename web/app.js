@@ -134,7 +134,7 @@
     // Cleared (set null) when all sliders are at 0. When non-null, renderDrawer
     // and renderDrawerShap read from these instead of the raw feature properties.
     scenarioAdjustedRisks: null,  // { m1_h3, m1_h6, m2_h3, m2_h6 }
-    scenarioAdjustedShap: null,   // { m1_h3: [[f,v],...], m1_h6:..., m2_h3:..., m2_h6:... }
+    scenarioAdjustedShap: null,   // { m1_h3: [[f,logit_value],...], m1_h6:..., m2_h3:..., m2_h6:... }
     scenarioActiveLevers: null,   // [{label, z}, ...] for the plain-language note
   };
 
@@ -1658,11 +1658,11 @@
   async function ensureCountyStats() {
     if (STATE.countyStats || STATE.countyStatsLoading || STATE.countyStatsTried) return;
     STATE.countyStatsLoading = true;
-    const data = await fetchOptional("data/county_stats.json");
+    const data = await fetchOptional("data/county_stats.json?v=drivers-pp-1");
     STATE.countyStats = data;
     STATE.countyStatsLoading = false;
     STATE.countyStatsTried = true;
-    if (STATE.pinnedFeature && isCountyMode()) renderDrawer();
+    if (STATE.pinnedFeature && isCountyMode()) refreshScenarioDrawer();
   }
 
   async function fetchGzipJson(path) {
@@ -1887,6 +1887,19 @@
       return e / (1 + e);
     }
   }
+  function shapToPp(risk, shapValue) {
+    if (risk == null || risk === "null") return null;
+    const p = Number(risk);
+    const v = Number(shapValue);
+    if (isNaN(p) || isNaN(v)) return null;
+    return (p - sigmoid(logit(p) - v)) * 100;
+  }
+  function fmtPp(v) {
+    const n = Number(v);
+    if (n == null || isNaN(n)) return "–";
+    const sign = n >= 0 ? "+" : "";
+    return `${sign}${n.toFixed(1)} pp`;
+  }
 
   // List of {label, z} for the plain-language scenario note in the drawer.
   function activeLeversForNote() {
@@ -1998,7 +2011,58 @@
     return shifts;
   }
 
-  // Apply linearized scenario adjustment to the pinned tract's risks and SHAP.
+  function driverFeature(row) {
+    return Array.isArray(row) ? row[0] : (row && (row.feature || row.f));
+  }
+
+  function driverValue(row) {
+    if (Array.isArray(row)) return Number(row[1]) || 0;
+    return Number(row && (row.value ?? row.shap ?? row.v)) || 0;
+  }
+
+  function countyDetailForPinned() {
+    const p = STATE.pinnedFeature;
+    if (!isCountyMode() || !p || !STATE.countyStats) return null;
+    return STATE.countyStats[p.f || p.cf] || null;
+  }
+
+  function baseDriverListForKey(key) {
+    const p = STATE.pinnedFeature;
+    if (!p) return null;
+    if (isCountyMode()) {
+      const countyDetail = countyDetailForPinned();
+      return countyDetail && countyDetail.drivers ? countyDetail.drivers[key] : null;
+    }
+    const entry = STATE.shap && p.f ? STATE.shap[p.f] : null;
+    return entry && entry[key] ? entry[key] : null;
+  }
+
+  function adjustedDriverLists(dShapByFeat) {
+    const out = {};
+    ["m1_h3", "m1_h6", "m2_h3", "m2_h6"].forEach(key => {
+      const base = baseDriverListForKey(key);
+      if (!base) { out[key] = null; return; }
+      const isM2 = key.startsWith("m2_");
+      const adj = new Map();
+      base.forEach(row => {
+        const feat = driverFeature(row);
+        if (!feat) return;
+        adj.set(feat, driverValue(row));
+      });
+      Object.entries(dShapByFeat).forEach(([leverKey, dS]) => {
+        const localD = isM2 ? dS : (dS * 0.4);
+        const cur = adj.get(leverKey) || 0;
+        adj.set(leverKey, cur + localD);
+      });
+      out[key] = [...adj.entries()]
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+        .slice(0, 8)
+        .map(([f, v]) => [f, v]);
+    });
+    return out;
+  }
+
+  // Apply linearized scenario adjustment to the pinned geography's risks and SHAP.
   // Populates STATE.scenarioAdjustedRisks / scenarioAdjustedShap, or clears
   // them when the scenario is at baseline. Caller should renderDrawer() after.
   function applyScenarioToDrawer() {
@@ -2036,11 +2100,6 @@
     STATE.scenarioAdjustedRisks = adjRisks;
     STATE.scenarioActiveLevers = activeLeversForNote();
 
-    if (isCountyMode()) {
-      STATE.scenarioAdjustedShap = null;
-      return;
-    }
-
     // 2) Adjusted SHAP top-N for the active (model × horizon).
     // We apply per-feature shifts to the existing top-8 list, then re-rank.
     // Features that aren't currently in the top-8 might come into the top-5
@@ -2048,36 +2107,7 @@
     // (it's not in shap_top.json). For completeness we synthesize an entry
     // for any lever feature whose adjusted magnitude exceeds the 5th-place
     // threshold; we treat its base as 0 and use Δshap as the new value.
-    if (STATE.shap) {
-      const fips = p.f;
-      const entry = STATE.shap[fips];
-      const adjShap = {};
-      ["m1_h3", "m1_h6", "m2_h3", "m2_h6"].forEach(key => {
-        const base = entry && entry[key] ? entry[key] : null;
-        if (!base) { adjShap[key] = null; return; }
-        const isM2 = key.startsWith("m2_");
-        // Build a map of feature → adjusted SHAP value.
-        const adj = new Map();
-        base.forEach(([feat, val]) => {
-          adj.set(feat, Number(val) || 0);
-        });
-        Object.entries(dShapByFeat).forEach(([leverKey, dS]) => {
-          // Apply with same model dampening as the risk calc.
-          const localD = isM2 ? dS : (dS * 0.4);
-          const cur = adj.get(leverKey) || 0;
-          adj.set(leverKey, cur + localD);
-        });
-        // Sort by absolute value, take top-8.
-        const sorted = [...adj.entries()]
-          .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-          .slice(0, 8)
-          .map(([f, v]) => [f, v]);
-        adjShap[key] = sorted;
-      });
-      STATE.scenarioAdjustedShap = adjShap;
-    } else {
-      STATE.scenarioAdjustedShap = null;
-    }
+    STATE.scenarioAdjustedShap = adjustedDriverLists(dShapByFeat);
 
   }
 
@@ -2296,8 +2326,7 @@
     const hzLbl = document.getElementById("drawerShapHz");
     if (!wrap) return;
     const shapSection = wrap.closest(".drawer__sect");
-    if (shapSection) shapSection.hidden = isCountyMode();
-    if (isCountyMode()) return;
+    if (shapSection) shapSection.hidden = false;
     const m = STATE.activeModel;
     const h = STATE.activeHorizon;
     const MODEL_NAME = { m1: "Diagnostic", m2: "Influenceable" };
@@ -2306,14 +2335,24 @@
 
     wrap.innerHTML = "";
 
-    if (STATE.shapLoading) {
+    const countyMode = isCountyMode();
+    if ((countyMode && STATE.countyStatsLoading) || (!countyMode && STATE.shapLoading)) {
       const li = document.createElement("li");
       li.className = "drawshap__empty";
       li.textContent = "Loading drivers…";
       wrap.appendChild(li);
       return;
     }
-    if (!STATE.shap) {
+    if (countyMode && !STATE.countyStats) {
+      const li = document.createElement("li");
+      li.className = "drawshap__empty";
+      li.textContent = STATE.countyStatsTried
+        ? "Drivers not yet computed for this build."
+        : "Drivers not yet loaded.";
+      wrap.appendChild(li);
+      return;
+    }
+    if (!countyMode && !STATE.shap) {
       const li = document.createElement("li");
       li.className = "drawshap__empty";
       li.textContent = STATE.shapTried
@@ -2323,15 +2362,20 @@
       return;
     }
 
-    const fips = STATE.pinnedFeature && STATE.pinnedFeature.f;
-    const entry = fips ? STATE.shap[fips] : null;
     const key = `${m}_${h}`;
-    const list = entry && entry[key] ? entry[key] : null;
+    const p = STATE.pinnedFeature || {};
+    const num = (v) => (v == null || v === "null") ? null : Number(v);
+    const adj = STATE.scenarioAdjustedRisks;
+    const risk = adj && adj[key] != null ? adj[key] : num(p[key]);
+    const list = (STATE.scenarioAdjustedShap && STATE.scenarioAdjustedShap[key])
+      || baseDriverListForKey(key);
 
     if (!list || !list.length) {
       const li = document.createElement("li");
       li.className = "drawshap__empty";
-      li.textContent = "Drivers not available for this tract.";
+      li.textContent = countyMode
+        ? "Drivers not available for this county."
+        : "Drivers not available for this tract.";
       wrap.appendChild(li);
       return;
     }
@@ -2339,42 +2383,46 @@
     // Cache stores top-8; we display top-5 with a render-time exclusion list
     // for any features deemed misleading for the policy audience.
     const RENDER_EXCLUDE = new Set(["has_hmda"]);
-    const filtered = list.filter(([f, _]) => !RENDER_EXCLUDE.has(f));
-    const top5 = filtered.slice(0, 5);
-    const maxAbs = Math.max(...top5.map(([, v]) => Math.abs(Number(v) || 0))) || 1e-6;
+    const rows = list
+      .map(row => {
+        const feat = driverFeature(row);
+        const rawValue = driverValue(row);
+        const storedPp = !Array.isArray(row) && row && row.pp != null ? Number(row.pp) : null;
+        const pp = (STATE.scenarioAdjustedShap && STATE.scenarioAdjustedShap[key])
+          ? shapToPp(risk, rawValue)
+          : (storedPp != null && !isNaN(storedPp) ? storedPp : shapToPp(risk, rawValue));
+        return { feat, value: rawValue, pp };
+      })
+      .filter(row => row.feat && !RENDER_EXCLUDE.has(row.feat) && row.pp != null && !isNaN(row.pp))
+      .sort((a, b) => Math.abs(b.pp) - Math.abs(a.pp));
+    const top5 = rows.slice(0, 5);
+    if (!top5.length) {
+      const li = document.createElement("li");
+      li.className = "drawshap__empty";
+      li.textContent = countyMode
+        ? "Drivers not available for this county."
+        : "Drivers not available for this tract.";
+      wrap.appendChild(li);
+      return;
+    }
+    const maxAbs = Math.max(...top5.map(row => Math.abs(row.pp))) || 1e-6;
 
-    // Translate raw SHAP magnitude into plain-English tiers.
-    // SHAP values here are log-odds; the strongest in our data top out around
-    // 2.0. We bucket relative to maxAbs so the label scales with what's
-    // currently visible, not an absolute scale the user has to interpret.
-    const tierLabel = (absV) => {
-      const r = absV / maxAbs;
-      if (r >= 0.75) return "Strongly";
-      if (r >= 0.40) return "Moderately";
-      if (r >= 0.15) return "Slightly";
-      return "Marginally";
-    };
-
-    top5.forEach(([feat, val]) => {
-      const v = Number(val) || 0;
-      const isPos = v >= 0;
-      const widthPct = Math.max(4, (Math.abs(v) / maxAbs) * 100);
+    top5.forEach(({ feat, pp }) => {
+      const isPos = pp >= 0;
+      const widthPct = Math.max(4, (Math.abs(pp) / maxAbs) * 100);
       const li = document.createElement("li");
       li.className = "drawshap";
       li.dataset.feat = feat;  // for tooltip binding
       li.tabIndex = 0;          // keyboard-focusable
       const pretty = FEATURE_LABEL[feat] || feat.replace(/_/g, " ");
-      const tier = tierLabel(Math.abs(v));
-      const direction = isPos ? "raises" : "lowers";
       const arrow = isPos ? "▲" : "▼";
-      const phrase = `${tier} ${direction} risk`;
       li.innerHTML = `
         <span class="drawshap__nm">
           <span class="drawshap__arrow ${isPos ? "pos" : "neg"}" aria-hidden="true">${arrow}</span>
           ${pretty}
         </span>
         <span class="drawshap__bar"><span class="drawshap__bar-fill ${isPos ? "pos" : "neg"}" style="width:${widthPct}%;"></span></span>
-        <span class="drawshap__v ${isPos ? "pos" : "neg"}">${phrase}</span>
+        <span class="drawshap__v ${isPos ? "pos" : "neg"}">${fmtPp(pp)}</span>
       `;
       // Tooltip handlers — show feature description on hover/focus
       li.addEventListener("mouseenter", (e) => showFeatureTip(feat, li));

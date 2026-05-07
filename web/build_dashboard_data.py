@@ -29,6 +29,7 @@ Outputs (web/data/):
 from __future__ import annotations
 import json
 import math
+import gzip
 from pathlib import Path
 
 import numpy as np
@@ -58,6 +59,8 @@ PREDS = {
 SRC_GEO = ROUND5 / "web" / "data" / "tracts.geojson"
 COUNTY_GEO = ROUND5 / "web" / "data" / "counties.geojson"
 COUNTY_LOOKUP = ROUND5 / "web" / "data" / "_lookup" / "county_names.txt"
+SHAP_JSON = DATA / "shap_top.json"
+SHAP_JSON_GZ = DATA / "shap_top.json.gz"
 
 # Search index inputs (downloaded ahead of build by the harness; if missing,
 # the city index falls back to a hardcoded list of major US cities).
@@ -209,6 +212,89 @@ def top_tracts_payload(sub: pd.DataFrame,
     return out
 
 
+def load_shap_top() -> dict:
+    """Load per-tract top SHAP drivers if present."""
+    if SHAP_JSON_GZ.exists():
+        with gzip.open(SHAP_JSON_GZ, "rt") as f:
+            data = json.load(f)
+        print(f"  SHAP driver source: {SHAP_JSON_GZ}")
+        return data
+    if SHAP_JSON.exists():
+        with SHAP_JSON.open() as f:
+            data = json.load(f)
+        print(f"  SHAP driver source: {SHAP_JSON}")
+        return data
+    print("  WARN: SHAP driver source missing; county drawer drivers will be empty")
+    return {}
+
+
+def _clip_prob(p: float) -> float:
+    return max(1e-4, min(1 - 1e-4, p))
+
+
+def shap_to_pp(risk: float, shap_value: float) -> float:
+    """Convert log-odds SHAP contribution to signed probability points."""
+    p = _clip_prob(float(risk))
+    z = math.log(p / (1 - p))
+    without_feature = 1 / (1 + math.exp(-(z - float(shap_value))))
+    return (p - without_feature) * 100
+
+
+def county_drivers_payload(sub: pd.DataFrame,
+                           shap_top: dict,
+                           model_keys: list[tuple[str, int]],
+                           limit: int = 8) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {f"{model}_h{h}": [] for (model, h) in model_keys}
+    for (model, h) in model_keys:
+        key = f"{model}_h{h}"
+        risk_col = f"risk_{model}_h{h}"
+        if risk_col not in sub.columns:
+            continue
+        valid = sub.dropna(subset=[risk_col]).copy()
+        if valid.empty:
+            continue
+        weighted = valid.dropna(subset=["population"]).copy()
+        if not weighted.empty and float(weighted["population"].sum()) > 0:
+            rows = weighted
+            weights = weighted["population"].to_numpy(dtype=float)
+        else:
+            rows = valid
+            weights = np.ones(len(valid), dtype=float)
+
+        total_weight = 0.0
+        feature_sums: dict[str, dict[str, float]] = {}
+        for row, weight in zip(rows.itertuples(index=False), weights):
+            entry = shap_top.get(str(row.tract_fips))
+            drivers = entry.get(key) if isinstance(entry, dict) else None
+            if not drivers:
+                continue
+            weight = float(weight)
+            total_weight += weight
+            risk = float(getattr(row, risk_col))
+            for feat, raw_value in drivers:
+                try:
+                    shap_value = float(raw_value)
+                except (TypeError, ValueError):
+                    continue
+                rec = feature_sums.setdefault(feat, {"value": 0.0, "pp": 0.0})
+                rec["value"] += shap_value * weight
+                rec["pp"] += shap_to_pp(risk, shap_value) * weight
+
+        if total_weight <= 0:
+            out[key] = []
+            continue
+        ranked = []
+        for feat, sums in feature_sums.items():
+            ranked.append({
+                "feature": feat,
+                "value": round(sums["value"] / total_weight, 4),
+                "pp": round(sums["pp"] / total_weight, 3),
+            })
+        ranked.sort(key=lambda r: abs(r["pp"]), reverse=True)
+        out[key] = ranked[:limit]
+    return out
+
+
 # Hardcoded fallback list of major US cities (used if Census Gazetteer is missing).
 # Roughly the top ~120 cities by population — enough to be useful but not exhaustive.
 HARDCODED_CITIES = [
@@ -352,6 +438,7 @@ def main() -> None:
     merged = merged.merge(tract_pop, on="tract_fips", how="left")
     pop_cov = int(merged["population"].notna().sum())
     print(f"  population coverage: {pop_cov:,} / {len(merged):,} tracts")
+    shap_top = load_shap_top()
 
     # ---- Within-state percentile ranks ----
     print("\n[3/7] Within-state percentile ranks…")
@@ -411,6 +498,7 @@ def main() -> None:
             fallback_counties.append(cf5)
 
         top_tracts = top_tracts_payload(sub, county_names_lookup, model_keys)
+        drivers = county_drivers_payload(sub, shap_top, model_keys)
         county_details[cf5] = {
             "cf": cf5,
             "st": st,
@@ -419,6 +507,7 @@ def main() -> None:
             "population": rec["population"],
             "weighting": "unweighted_fallback" if used_unweighted_fallback else "population_weighted",
             "top_tracts": top_tracts,
+            "drivers": drivers,
         }
         county_rows.append(rec)
 

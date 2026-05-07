@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Two-Layer Credit-Desert Risk · Round 7</title>
-  <script>(function(){var s=localStorage.getItem('theme');var t=s||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;}());</script>
+  <script>(function () { var s = localStorage.getItem('theme'); var t = s || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = t; }());</script>
   <meta name="description"
     content="An interactive forecast of small-business credit-desert risk across U.S. counties and census tracts. Two models, two horizons, one map.">
   <meta name="theme-color" content="#1c2230">
@@ -105,17 +105,17 @@
 
       <!-- Floating overlay: metadata strip + reload button (bottom-left group) -->
       <div class="ovl--bl">
-      <div class="ovl ovl--meta" aria-hidden="false">
-        <span class="meta__cell"><b class="meta__k">n</b> <span class="mono num" id="metaGeoCount">3,235</span> <span
-            id="metaGeoLabel">counties</span></span>
-        <span class="meta__sep">·</span>
-        <span class="meta__cell">2009<span class="meta__d">→</span>2024 panel</span>
-        <span class="meta__sep">·</span>
-        <span class="meta__cell">8 time-split tests, no leakage</span>
-        <span class="meta__sep">·</span>
-        <span class="meta__cell" id="metaHorizon">2027 forecast · trained on data through 2021 · predicts 2024</span>
-      </div>
-      <button class="ovl ovl--reload" id="reloadMapBtn" type="button" aria-label="Reload map">Reload map</button>
+        <div class="ovl ovl--meta" aria-hidden="false">
+          <span class="meta__cell"><b class="meta__k">n</b> <span class="mono num" id="metaGeoCount">3,235</span> <span
+              id="metaGeoLabel">counties</span></span>
+          <span class="meta__sep">·</span>
+          <span class="meta__cell">2009<span class="meta__d">→</span>2024 panel</span>
+          <span class="meta__sep">·</span>
+          <span class="meta__cell">8 time-split tests, no leakage</span>
+          <span class="meta__sep">·</span>
+          <span class="meta__cell" id="metaHorizon">2027 forecast · trained on data through 2021 · predicts 2024</span>
+        </div>
+        <button class="ovl ovl--reload" id="reloadMapBtn" type="button" aria-label="Reload map">Reload map</button>
       </div>
 
       <!-- Floating overlay: legend (bottom-right) -->
@@ -148,7 +148,7 @@
             <span class="rail__model-tag" id="railModelTag">Lens 1</span>
             <h2 class="rail__model-name" id="railModelName">Diagnostic</h2>
           </div>
-          <p class="rail__model-desc" id="railModelDesc">All 39 features. Round-5 champion. The strongest predictor of
+          <p class="rail__model-desc" id="railModelDesc">All 39 features. The strongest predictor of
             future credit deserts, but it leans on supply-side signal we can't move.</p>
           <p class="rail__horizon-desc" id="railHorizonDesc">2027 forecast: trained on data through 2021, predicts state
             at 2024. Federal CRA reporting lags about 2 years, so this is the soonest-actionable forecast.</p>
@@ -348,7 +348,9 @@
           <h3 class="meth__h">Why 2027 and 2030, not next year.</h3>
           <p class="accordion__hook">Federal CRA and HMDA data arrives ~2 years late, making 1-year-ahead forecasts
             useless in practice; the models were trained at the two soonest actionable horizons instead.</p>
-          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Why 2027 and 2030, not next year"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+          <button class="accordion__toggle" aria-expanded="false"
+            aria-label="Toggle: Why 2027 and 2030, not next year"><i class="accordion__chevron"
+              aria-hidden="true">&#9658;</i>
             Details</button>
           <div class="accordion__body">
             <p>An earlier version of this dashboard predicted one year ahead. That's useless in practice: federal CRA
@@ -380,7 +382,8 @@
           <h3 class="meth__h">Two layers, one panel.</h3>
           <p class="accordion__hook">Model 1 uses every available signal for the best possible forecast; Model 2 uses
             only the 20 features a policymaker could build or fund, residualized against demographics.</p>
-          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Two layers, one panel"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Two layers, one panel"><i
+              class="accordion__chevron" aria-hidden="true">&#9658;</i>
             Details</button>
           <div class="accordion__body">
             <p>Both models train on the same tract-year panel, <span class="mono">2009&ndash;2024</span>, averaged
@@ -448,7 +451,8 @@
           <h3 class="meth__h">Importance is not impact.</h3>
           <p class="accordion__hook">A feature the model notices heavily is not always the same as a feature that
             changes the final forecast by itself.</p>
-          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Importance is not impact"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Importance is not impact"><i
+              class="accordion__chevron" aria-hidden="true">&#9658;</i>
             Details</button>
           <div class="accordion__body">
             <p>We check each category by asking: if the model loses this category, how much worse does its ranking of
@@ -472,7 +476,8 @@
           <p class="accordion__hook">The chart shows how much the model weights each feature across 8 time-split tests;
             names ending in <span class="mono">_resid</span> had their demographic component mathematically removed
             before training.</p>
-          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Top features at this horizon"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Top features at this horizon"><i
+              class="accordion__chevron" aria-hidden="true">&#9658;</i>
             Details</button>
           <div class="accordion__body">
             <p>How much the model leans on each feature, averaged across 8 time-split tests. This is different from the
@@ -498,7 +503,8 @@
           <p class="accordion__hook">Training the same architecture on pre- vs. post-COVID data shows distance-to-branch
             dominated before; lender concentration and MDI presence dominate after — the world changed, not the model.
           </p>
-          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: The COVID break"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: The COVID break"><i
+              class="accordion__chevron" aria-hidden="true">&#9658;</i>
             Details</button>
           <div class="accordion__body">
             <p>We trained the same architecture on pre-COVID data and on post-COVID data and asked which features the
@@ -521,7 +527,8 @@
           <p class="accordion__hook">The unit is a census tract over multiple years, so anything finer (one branch
             closing, one new program) is invisible, and future shocks outside the training distribution aren't
             foreseeable.</p>
-          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: What this map can&rsquo;t see"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+          <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: What this map can&rsquo;t see"><i
+              class="accordion__chevron" aria-hidden="true">&#9658;</i>
             Details</button>
           <div class="accordion__body">
             <p>The unit is the census tract; the horizon is multi-year. Anything operating below that resolution (the
@@ -613,10 +620,10 @@
         <div class="kicker drawer__sect-h">What's pushing this prediction · <span id="drawerShapHz">Diagnostic · 2027
             forecast</span></div>
         <p class="drawer__hint">
-          The five conditions in this neighborhood's data that are most
-          responsible for the forecast above. ▲ means the condition raises
-          the predicted risk; ▼ means it lowers it. Bar length shows how
-          much, relative to the others on this list.
+          The five conditions in this geography's data that move the forecast
+          most. ▲ adds percentage points to predicted risk; ▼ removes
+          percentage points. Bar length shows how much, relative to the others
+          on this list.
         </p>
         <ol class="drawer__shap" id="drawerShap"></ol>
       </section>
@@ -682,7 +689,8 @@
   <!-- Feature dictionary overlay -->
   <div id="featureDictOverlay" class="featureDict" hidden aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="featureDictTitle">
-    <button class="featureDict__backdrop" type="button" data-feature-dict-close aria-label="Close feature dictionary"></button>
+    <button class="featureDict__backdrop" type="button" data-feature-dict-close
+      aria-label="Close feature dictionary"></button>
     <section class="featureDict__panel" tabindex="-1">
       <header class="featureDict__head">
         <div>
@@ -719,31 +727,36 @@
       <h3 class="spotlight__title"></h3>
       <div class="spotlight__body"></div>
       <div class="spotlight__nav">
-        <button class="spotlight__prev" type="button" aria-label="Previous"><span aria-hidden="true">&#8249;</span> Prev</button>
-        <button class="spotlight__next" type="button" aria-label="Next">Next <span aria-hidden="true">&#8250;</span></button>
-        <button class="spotlight__close" type="button" aria-label="Close spotlight">Got it <span aria-hidden="true">&#8629;</span></button>
+        <button class="spotlight__prev" type="button" aria-label="Previous"><span aria-hidden="true">&#8249;</span>
+          Prev</button>
+        <button class="spotlight__next" type="button" aria-label="Next">Next <span
+            aria-hidden="true">&#8250;</span></button>
+        <button class="spotlight__close" type="button" aria-label="Close spotlight">Got it <span
+            aria-hidden="true">&#8629;</span></button>
       </div>
     </aside>
   </div>
 
   <button class="theme-toggle" type="button" aria-label="Toggle light/dark theme" data-theme-toggle>
     <svg class="theme-toggle__sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="8" cy="8" r="3.25" stroke="currentColor" stroke-width="1.5"/>
-      <line x1="8" y1="1" x2="8" y2="2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="8" y1="13.5" x2="8" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="1" y1="8" x2="2.5" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="13.5" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="3.05" y1="3.05" x2="4.11" y2="4.11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="11.89" y1="11.89" x2="12.95" y2="12.95" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="12.95" y1="3.05" x2="11.89" y2="4.11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      <line x1="4.11" y1="11.89" x2="3.05" y2="12.95" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="8" cy="8" r="3.25" stroke="currentColor" stroke-width="1.5" />
+      <line x1="8" y1="1" x2="8" y2="2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <line x1="8" y1="13.5" x2="8" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <line x1="1" y1="8" x2="2.5" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <line x1="13.5" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <line x1="3.05" y1="3.05" x2="4.11" y2="4.11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <line x1="11.89" y1="11.89" x2="12.95" y2="12.95" stroke="currentColor" stroke-width="1.5"
+        stroke-linecap="round" />
+      <line x1="12.95" y1="3.05" x2="11.89" y2="4.11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      <line x1="4.11" y1="11.89" x2="3.05" y2="12.95" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
     </svg>
     <svg class="theme-toggle__moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M13.5 10A6 6 0 0 1 6 2.5a5.5 5.5 0 1 0 7.5 7.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M13.5 10A6 6 0 0 1 6 2.5a5.5 5.5 0 1 0 7.5 7.5Z" stroke="currentColor" stroke-width="1.5"
+        stroke-linejoin="round" />
     </svg>
   </button>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 
 </html>
