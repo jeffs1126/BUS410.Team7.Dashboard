@@ -403,6 +403,16 @@
               </tr>
             </tbody>
           </table>
+          <div class="dictLaunch" aria-label="Open feature dictionaries">
+            <button class="dictLaunch__btn dictLaunch__btn--m1" type="button" data-feature-dict="diagnostic">
+              <span class="dictLaunch__eyebrow mono">Diagnostic</span>
+              <span class="dictLaunch__label">View 39-feature dictionary</span>
+            </button>
+            <button class="dictLaunch__btn dictLaunch__btn--m2" type="button" data-feature-dict="influenceable">
+              <span class="dictLaunch__eyebrow mono">Influenceable</span>
+              <span class="dictLaunch__label">View 20-feature dictionary</span>
+            </button>
+          </div>
         </div>
       </article>
 
@@ -643,6 +653,33 @@
     </div>
   </div>
 
+  <!-- Feature dictionary overlay -->
+  <div id="featureDictOverlay" class="featureDict" hidden aria-hidden="true" role="dialog" aria-modal="true"
+    aria-labelledby="featureDictTitle">
+    <button class="featureDict__backdrop" type="button" data-feature-dict-close aria-label="Close feature dictionary"></button>
+    <section class="featureDict__panel" tabindex="-1">
+      <header class="featureDict__head">
+        <div>
+          <p class="featureDict__kicker mono" id="featureDictKicker">Feature dictionary</p>
+          <h2 class="featureDict__title" id="featureDictTitle">Model features</h2>
+        </div>
+        <button class="featureDict__close" id="featureDictClose" type="button" data-feature-dict-close>Close</button>
+      </header>
+      <div class="featureDict__body">
+        <table class="featureDict__table">
+          <thead>
+            <tr>
+              <th>Original column</th>
+              <th>Plain-English name</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody id="featureDictRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
   <!-- Spotlight tour overlay -->
   <div id="spotlight" class="spotlight" hidden aria-hidden="true" role="dialog" aria-modal="true"
     aria-label="Dashboard guide">
@@ -659,7 +696,7 @@
     </aside>
   </div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 
 </html>

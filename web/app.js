@@ -102,6 +102,7 @@
     focusedState: null,           // state abbreviation, or null
     sliderShifts: {},             // key → z-score shift
     feat: null,                   // feature_stats.json (flat: { key: {...} })
+    featureDictionary: null,      // feature_dictionary.json
     states: null,                 // state_stats.json
     countyStats: null,            // county_stats.json
     countyStatsLoading: false,
@@ -605,8 +606,9 @@
     document.body.dataset.model = "m1";
     document.body.dataset.horizon = "h3";
 
-    const [feat, states, bbox, ablH3, ablH6, regH3, regH6, prH3, prH6] = await Promise.all([
+    const [feat, dict, states, bbox, ablH3, ablH6, regH3, regH6, prH3, prH6] = await Promise.all([
       fetchOptional("data/feature_stats.json"),
+      fetchOptional("data/feature_dictionary.json"),
       fetchOptional("data/state_stats.json"),
       fetchOptional("data/state_bbox.json"),
       fetchOptional("data/ablation_h3.json"),
@@ -617,6 +619,7 @@
       fetchOptional("data/pruning_h6.json"),
     ]);
     STATE.feat    = feat;
+    STATE.featureDictionary = dict;
     STATE.states  = states;
     STATE.bbox    = bbox;
     STATE.abl     = { h3: ablH3, h6: ablH6 };
@@ -639,6 +642,7 @@
     bindDrawerClose();
     syncHorizonAffordances();
     initAccordions();
+    initFeatureDictionary();
     document.querySelector('.guide__card:first-child .accordion__toggle')?.click();
     const stripCtrl = initGuideStrip();
     initSpotlight(stripCtrl);
@@ -837,6 +841,110 @@
         bodies.forEach(b => b.classList.toggle("is-open", !isOpen));
         btn.setAttribute("aria-expanded", String(!isOpen));
       });
+    });
+  }
+
+  function initFeatureDictionary() {
+    const overlay = document.getElementById("featureDictOverlay");
+    const rowsEl = document.getElementById("featureDictRows");
+    const titleEl = document.getElementById("featureDictTitle");
+    const kickerEl = document.getElementById("featureDictKicker");
+    const closeBtn = document.getElementById("featureDictClose");
+    const launchers = Array.from(document.querySelectorAll("[data-feature-dict]"));
+    if (!overlay || !rowsEl || !titleEl || !kickerEl || !closeBtn || !launchers.length) return;
+
+    let lastTrigger = null;
+
+    const meta = {
+      diagnostic: {
+        title: "Diagnostic feature dictionary",
+        label: "Diagnostic",
+      },
+      influenceable: {
+        title: "Influenceable feature dictionary",
+        label: "Influenceable",
+      },
+    };
+
+    function render(model) {
+      const items = (STATE.featureDictionary && STATE.featureDictionary[model]) || [];
+      const modelMeta = meta[model] || meta.diagnostic;
+
+      overlay.dataset.model = model;
+      titleEl.textContent = modelMeta.title;
+      kickerEl.textContent = `${modelMeta.label} · ${items.length} features`;
+      rowsEl.replaceChildren();
+
+      if (!items.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 3;
+        td.textContent = "Feature dictionary unavailable.";
+        tr.appendChild(td);
+        rowsEl.appendChild(tr);
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      items.forEach(item => {
+        const tr = document.createElement("tr");
+        [item.column, item.label, item.description].forEach(value => {
+          const td = document.createElement("td");
+          td.textContent = value || "Not available";
+          tr.appendChild(td);
+        });
+        frag.appendChild(tr);
+      });
+      rowsEl.appendChild(frag);
+    }
+
+    function open(model, trigger) {
+      lastTrigger = trigger || null;
+      render(model);
+      overlay.hidden = false;
+      overlay.setAttribute("aria-hidden", "false");
+      document.body.classList.add("is-feature-dict-open");
+      requestAnimationFrame(() => closeBtn.focus());
+    }
+
+    function close() {
+      if (overlay.hidden) return;
+      overlay.hidden = true;
+      overlay.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("is-feature-dict-open");
+      if (lastTrigger && document.contains(lastTrigger)) lastTrigger.focus();
+      lastTrigger = null;
+    }
+
+    launchers.forEach(btn => {
+      btn.addEventListener("click", () => open(btn.dataset.featureDict, btn));
+    });
+
+    overlay.querySelectorAll("[data-feature-dict-close]").forEach(btn => {
+      btn.addEventListener("click", close);
+    });
+
+    document.addEventListener("keydown", e => {
+      if (overlay.hidden) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+        return;
+      }
+
+      if (e.key !== "Tab") return;
+      const focusable = Array.from(overlay.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"))
+        .filter(el => !el.disabled && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     });
   }
 

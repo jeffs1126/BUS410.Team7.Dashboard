@@ -1,0 +1,301 @@
+{
+  "diagnostic": [
+    {
+      "column": "ruca_code",
+      "label": "Urban-to-rural classification (USDA RUCA)",
+      "description": "USDA Rural-Urban Commuting Area code from 1 to 10; higher values mean more rural."
+    },
+    {
+      "column": "housing_units",
+      "label": "Housing units",
+      "description": "Total housing units in the tract."
+    },
+    {
+      "column": "is_persistent_poverty",
+      "label": "Persistent-poverty county",
+      "description": "1 if the tract is in a USDA-designated persistent-poverty county, defined by long-running poverty of at least 20 percent."
+    },
+    {
+      "column": "population",
+      "label": "Population",
+      "description": "Total population in the tract from ACS 5-year estimates."
+    },
+    {
+      "column": "median_hh_income",
+      "label": "Median household income",
+      "description": "Median household income in the tract from ACS 5-year estimates."
+    },
+    {
+      "column": "pct_black",
+      "label": "Pct Black",
+      "description": "Share of tract population identifying as Black or African-American."
+    },
+    {
+      "column": "fdic_deposit_hhi_chg3yr",
+      "label": "FDIC deposit HHI, 3-year change",
+      "description": "Three-year change in county bank-deposit concentration using the FDIC Summary of Deposits."
+    },
+    {
+      "column": "pct_minority",
+      "label": "Pct minority",
+      "description": "Share of tract population identifying as a racial or ethnic minority."
+    },
+    {
+      "column": "is_rural",
+      "label": "Rural area",
+      "description": "1 if the tract is rural by USDA RUCA classification; 0 otherwise."
+    },
+    {
+      "column": "fdic_deposit_hhi",
+      "label": "FDIC deposit HHI",
+      "description": "County-level Herfindahl-Hirschman Index for bank deposits, where higher values mean deposits are concentrated in fewer banks."
+    },
+    {
+      "column": "fdic_top_bank_share_chg3yr",
+      "label": "Top bank deposit share, 3-year change",
+      "description": "Three-year change in the largest bank's share of county deposits."
+    },
+    {
+      "column": "cra_county_amount_hhi",
+      "label": "County CRA loan-amount HHI",
+      "description": "County-level concentration of CRA small-business loan dollars across lenders."
+    },
+    {
+      "column": "pct_poverty",
+      "label": "Poverty rate",
+      "description": "Share of tract population below the federal poverty line."
+    },
+    {
+      "column": "has_hmda",
+      "label": "HMDA available",
+      "description": "1 if HMDA mortgage data is available for the tract-year; mainly marks post-2018 observations in this pipeline."
+    },
+    {
+      "column": "pct_vacant",
+      "label": "Pct vacant housing",
+      "description": "Share of tract housing units that are vacant."
+    },
+    {
+      "column": "cra_county_top_lender_share_count",
+      "label": "County top CRA lender share by count",
+      "description": "Largest lender's share of county CRA small-business loans by loan count."
+    },
+    {
+      "column": "pct_hispanic",
+      "label": "Pct Hispanic",
+      "description": "Share of tract population identifying as Hispanic or Latino."
+    },
+    {
+      "column": "sum_loan_amount",
+      "label": "Total HMDA loan amount",
+      "description": "Total dollar amount of HMDA mortgage originations in the tract-year."
+    },
+    {
+      "column": "cra_county_count_hhi",
+      "label": "County CRA loan-count HHI",
+      "description": "County-level concentration of CRA small-business loan counts across lenders."
+    },
+    {
+      "column": "mean_loan_amount",
+      "label": "Mean HMDA loan amount",
+      "description": "Average HMDA mortgage loan amount in the tract-year."
+    },
+    {
+      "column": "fdic_top_bank_share",
+      "label": "FDIC top bank share",
+      "description": "Largest bank's share of county deposits."
+    },
+    {
+      "column": "cra_county_top_lender_share_amount",
+      "label": "County top CRA lender share by amount",
+      "description": "Largest lender's share of county CRA small-business loan dollars."
+    },
+    {
+      "column": "n_white",
+      "label": "White HMDA applicants",
+      "description": "Count of HMDA applicants identifying as White in the tract-year."
+    },
+    {
+      "column": "fdic_deposit_hhi_chg1yr",
+      "label": "FDIC deposit HHI, 1-year change",
+      "description": "One-year change in county bank-deposit concentration."
+    },
+    {
+      "column": "fdic_top_bank_share_chg1yr",
+      "label": "Top bank deposit share, 1-year change",
+      "description": "One-year change in the largest bank's share of county deposits."
+    },
+    {
+      "column": "pct_bachelor_plus",
+      "label": "Pct bachelor's plus",
+      "description": "Share of adults with a bachelor's degree or higher."
+    },
+    {
+      "column": "n_originated",
+      "label": "HMDA mortgage originations",
+      "description": "Count of HMDA mortgage applications that were originated in the tract-year."
+    },
+    {
+      "column": "unemployment_rate",
+      "label": "Unemployment rate",
+      "description": "Share of the labor force that is unemployed."
+    },
+    {
+      "column": "n_withdrawn",
+      "label": "HMDA applications withdrawn",
+      "description": "Count of HMDA mortgage applications withdrawn by the applicant."
+    },
+    {
+      "column": "n_distinct_lenders",
+      "label": "Distinct HMDA lenders",
+      "description": "Count of distinct HMDA-reporting mortgage lenders active in the tract-year."
+    },
+    {
+      "column": "n_denied",
+      "label": "HMDA mortgage denials",
+      "description": "Count of HMDA mortgage applications denied in the tract-year."
+    },
+    {
+      "column": "approval_rate",
+      "label": "HMDA approval rate",
+      "description": "Share of decided HMDA mortgage applications that were approved."
+    },
+    {
+      "column": "n_applications",
+      "label": "HMDA mortgage applications",
+      "description": "Count of HMDA mortgage applications in the tract-year."
+    },
+    {
+      "column": "denial_rate",
+      "label": "HMDA denial rate",
+      "description": "Share of decided HMDA mortgage applications that were denied."
+    },
+    {
+      "column": "n_hispanic",
+      "label": "Hispanic HMDA applicants",
+      "description": "Count of HMDA applicants identifying as Hispanic in the tract-year."
+    },
+    {
+      "column": "n_other_race",
+      "label": "Other or unreported-race HMDA applicants",
+      "description": "Count of HMDA applicants with other or unreported race categories."
+    },
+    {
+      "column": "n_black",
+      "label": "Black HMDA applicants",
+      "description": "Count of HMDA applicants identifying as Black in the tract-year."
+    },
+    {
+      "column": "n_purchased",
+      "label": "HMDA loans purchased",
+      "description": "Count of HMDA mortgage loans purchased by reporting institutions."
+    },
+    {
+      "column": "n_asian",
+      "label": "Asian HMDA applicants",
+      "description": "Count of HMDA applicants identifying as Asian in the tract-year."
+    }
+  ],
+  "influenceable": [
+    {
+      "column": "pct_loans_from_community_banks_resid",
+      "label": "% loans from community banks (residualized)",
+      "description": "Share of CRA small-business loans from community banks after residualizing against demographics and market context."
+    },
+    {
+      "column": "pct_loans_from_top4_banks_resid",
+      "label": "% loans from top-4 banks (residualized)",
+      "description": "Share of CRA small-business loans from the four largest national banks after residualization."
+    },
+    {
+      "column": "pct_loans_from_credit_unions_resid",
+      "label": "% loans from credit unions (residualized)",
+      "description": "Share of CRA small-business loans from credit unions after residualization."
+    },
+    {
+      "column": "pct_loans_under_100k_resid",
+      "label": "% loans under $100k (residualized)",
+      "description": "Share of CRA small-business loans below $100,000 after residualization."
+    },
+    {
+      "column": "pct_loans_under_250k_resid",
+      "label": "% loans under $250k (residualized)",
+      "description": "Share of CRA small-business loans below $250,000 after residualization."
+    },
+    {
+      "column": "top1_lender_share_tract_resid",
+      "label": "Top-1 lender share (residualized)",
+      "description": "Single largest CRA lender's tract-level loan share after residualization."
+    },
+    {
+      "column": "top3_lender_share_tract_resid",
+      "label": "Top-3 lender share (residualized)",
+      "description": "Combined loan share of the three largest CRA lenders in the tract after residualization."
+    },
+    {
+      "column": "lender_hhi_tract_resid",
+      "label": "Lender HHI (residualized)",
+      "description": "Tract-level CRA lender concentration after residualization; higher values mean a more concentrated lender market."
+    },
+    {
+      "column": "distance_to_nearest_bank_branch",
+      "label": "Distance to nearest bank branch (mi)",
+      "description": "Straight-line distance from the tract centroid to the closest FDIC-insured bank branch, in miles."
+    },
+    {
+      "column": "branches_within_5mi",
+      "label": "Bank branches within 5mi",
+      "description": "Count of FDIC-insured bank branches within 5 miles of the tract centroid."
+    },
+    {
+      "column": "branch_closures_3y_within_10mi",
+      "label": "Branch closures, 3y within 10mi",
+      "description": "Count of bank branches within 10 miles that disappeared in the prior 3 years."
+    },
+    {
+      "column": "microloan_intermediary_within_25mi",
+      "label": "Microlender intermediaries within 25mi",
+      "description": "Count of SBA-designated microlender intermediaries within 25 miles."
+    },
+    {
+      "column": "mdi_branches_within_10mi",
+      "label": "MDI branches within 10mi",
+      "description": "Count of Minority Depository Institution branches within 10 miles."
+    },
+    {
+      "column": "mdi_branches_within_25mi",
+      "label": "MDI branches within 25mi",
+      "description": "Count of Minority Depository Institution branches within 25 miles."
+    },
+    {
+      "column": "nearest_mdi_branch_miles",
+      "label": "Nearest MDI branch (mi)",
+      "description": "Distance from the tract centroid to the nearest Minority Depository Institution branch, in miles."
+    },
+    {
+      "column": "mdi_active_in_county",
+      "label": "MDI active in county",
+      "description": "1 if any Minority Depository Institution branch is active in the tract's county-year; 0 otherwise."
+    },
+    {
+      "column": "ssbci_active",
+      "label": "SSBCI program active",
+      "description": "1 if a State Small Business Credit Initiative program is active in the state-year; 0 otherwise."
+    },
+    {
+      "column": "ssbci_2_0_active",
+      "label": "SSBCI 2.0 active",
+      "description": "1 if the post-2022 SSBCI 2.0 program is active in the state-year; 0 otherwise."
+    },
+    {
+      "column": "ssbci_program_count",
+      "label": "SSBCI program count",
+      "description": "Count of distinct SSBCI program types active in the state-year."
+    },
+    {
+      "column": "ssbci_n_capital_programs",
+      "label": "SSBCI capital programs",
+      "description": "Count of active SSBCI capital-deployment program types, excluding venture-only programs."
+    }
+  ]
+}
