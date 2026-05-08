@@ -230,7 +230,7 @@
     // ─── Influenceable lens — SSBCI state policy ──────────────────────────
     ssbci_active: {
       what: "1 if the State Small Business Credit Initiative (SSBCI) had an active program in this state-year; 0 otherwise. SSBCI 1.0 ran 2011–2017; SSBCI 2.0 runs 2022–present.",
-      read: "1 means the federal-state program supporting small-business lenders was active.",
+      read: "A 1 in the data means the federal-state program supporting small-business lenders was active.",
     },
     ssbci_2_0_active: {
       what: "1 specifically for SSBCI 2.0 (2022+). Distinct from SSBCI 1.0 because the program design shifted toward equity investments.",
