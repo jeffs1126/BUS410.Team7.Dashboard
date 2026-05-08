@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Two-Layer Credit-Desert Risk · Round 7</title>
+  <title>Two-Layer Credit-Desert Risk</title>
   <script>(function () { var s = localStorage.getItem('theme'); var t = s || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = t; }());</script>
   <meta name="description"
     content="An interactive forecast of small-business credit-desert risk across U.S. counties and census tracts. Two models, two horizons, one map.">
@@ -37,7 +37,7 @@
 
       <!-- Floating overlay: title (top-left) -->
       <header class="ovl ovl--title">
-        <div class="kicker">BUS 410 · Round 7 · v3 / 2026</div>
+        <div class="kicker">BUS 410 · credit-desert risk · 2026</div>
         <h1 class="title">
           <span class="title__line">Two-Layer</span>
           <span class="title__line">Credit-Desert Risk.</span>
@@ -148,26 +148,41 @@
             <span class="rail__model-tag" id="railModelTag">Lens 1</span>
             <h2 class="rail__model-name" id="railModelName">Diagnostic</h2>
           </div>
-          <p class="rail__model-desc" id="railModelDesc">All 39 features. The strongest predictor of
-            future credit deserts, but it leans on supply-side signal we can't move.</p>
-          <p class="rail__horizon-desc" id="railHorizonDesc">2027 forecast: trained on data through 2021, predicts state
-            at 2024. Federal CRA reporting lags about 2 years, so this is the soonest-actionable forecast.</p>
+          <p class="rail__model-desc" id="railModelDesc">Status-quo lens: demographics and environmental conditions
+            show whether local context is driving credit risk.</p>
+          <div class="rail__detail" data-accordion>
+            <button class="accordion__toggle rail__why" aria-expanded="false"
+              aria-label="Toggle model details"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+              Why?</button>
+            <div class="accordion__body">
+              <p>Diagnostic acts like a magnifying glass on the social and economic environment. Influenceable looks at
+                lending-access variables that people can move: branches, mission lenders, lender concentration, and state
+                programs.</p>
+            </div>
+          </div>
         </div>
 
-        <div class="rail__bignums">
-          <div class="bignum">
-            <div class="bignum__v" id="bigAuc">–</div>
-            <div class="bignum__l">AUC <span class="bignum__sub">area under curve, averaged across 8 time-split
-                tests</span></div>
-          </div>
-          <div class="bignum">
-            <div class="bignum__v" id="bigAp">–</div>
-            <div class="bignum__l">AP <span class="bignum__sub">average precision</span></div>
-          </div>
-          <div class="bignum bignum--small">
-            <div class="bignum__v" id="bigSpread">–</div>
-            <div class="bignum__l">Fold spread <span class="bignum__sub">how much accuracy varies across time-split
-                tests</span></div>
+        <div class="rail__metrics" data-accordion>
+          <button class="accordion__toggle rail__why" aria-expanded="false"
+            aria-label="Toggle model metrics"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+            Model metrics</button>
+          <div class="accordion__body">
+            <div class="rail__bignums">
+              <div class="bignum">
+                <div class="bignum__v" id="bigAuc">–</div>
+                <div class="bignum__l">AUC <span class="bignum__sub">area under curve, averaged across time-split
+                    tests</span></div>
+              </div>
+              <div class="bignum">
+                <div class="bignum__v" id="bigAp">–</div>
+                <div class="bignum__l">PR <span class="bignum__sub">average precision</span></div>
+              </div>
+              <div class="bignum bignum--small">
+                <div class="bignum__v" id="bigSpread">–</div>
+                <div class="bignum__l">Fold spread <span class="bignum__sub">variation across time-split tests</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -180,8 +195,7 @@
           <div class="kicker rail__sect rail__sect--mid">Where the lens looks weakest</div>
           <ol class="topstates topstates--auc" id="weakStates"></ol>
           <div class="kicker rail__sect rail__sect--mid">National risk distribution</div>
-          <p class="rail__hint" id="histCaption">Counties per risk decile · active model × horizon. Long left tail =
-            most counties read low risk; the rightmost bar is the high-risk shoulder.</p>
+          <p class="rail__hint" id="histCaption">Counties by risk band for the active lens and horizon.</p>
           <div class="histo" id="natHisto" aria-label="Histogram of county risk by decile"></div>
         </div>
 
@@ -227,8 +241,17 @@
         <!-- Scenario sliders -->
         <div class="rail__sliders">
           <div class="kicker rail__sect">Scenario levers</div>
-          <p class="rail__hint">Move a lever to push national means. The map recolors live for the active model and
-            horizon. Scenario levers are model sensitivity estimates, not causal guarantees.</p>
+          <p class="rail__hint">Move a lever and the map recolors live. This is sensitivity, not a causal guarantee.</p>
+          <div class="rail__detail" data-accordion>
+            <button class="accordion__toggle rail__why" aria-expanded="false"
+              aria-label="Toggle scenario details"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+              Why?</button>
+            <div class="accordion__body">
+              <p>The sliders use model sensitivity, category-dependence checks, and feature strength to estimate how the
+                forecast responds. They show where lending-environment levers matter in the model, not what one policy
+                will cause by itself.</p>
+            </div>
+          </div>
           <div id="sliders"></div>
           <button class="reset" id="resetBtn" type="button">Reset all levers</button>
         </div>
@@ -256,9 +279,9 @@
             <h3 class="guide__h">The toggles</h3>
             <span class="guide__caret" aria-hidden="true">&#8250;</span>
             <div class="accordion__body">
-              <p><b>Model.</b> Diagnostic uses every available signal, including supply-side ones we can&rsquo;t move.
-                Influenceable uses only levers a policymaker could fund or build. <b>Horizon.</b> 2027 is the
-                soonest-actionable forecast; 2030 is a longer-reach scenario.</p>
+              <p><b>Model.</b> Diagnostic shows whether demographics and environment are driving risk. Influenceable
+                shows whether lending-access variables are driving risk. <b>Horizon.</b> 2027 is nearest useful;
+                2030 is longer reach.</p>
             </div>
           </button>
 
@@ -296,15 +319,13 @@
             </div>
           </button>
 
-          <button class="guide__card" type="button" data-spotlight-target=".ovl--toggles .toggrp:first-child">
+          <button class="guide__card" type="button" data-spotlight-target="#map" data-guide-action="compare-models">
             <div class="guide__num">05</div>
-            <h3 class="guide__h">What to look for</h3>
+            <h3 class="guide__h">Click a place, compare lenses</h3>
             <span class="guide__caret" aria-hidden="true">&#8250;</span>
             <div class="accordion__body">
-              <p>Switch Diagnostic &#8596; Influenceable with an area hovered. Same place, different lens. The gap is
-                between &ldquo;structural disadvantage&rdquo; and &ldquo;things you could fund.&rdquo; If a county reads
-                high on Diagnostic but lower on Influenceable, the levers we have don&rsquo;t reach it; tract mode lets
-                you inspect the neighborhoods inside it.</p>
+              <p>Click a county or tract to open the drawer, then switch Diagnostic &#8596; Influenceable. The question:
+                is risk coming from status-quo conditions, lending-environment variables, or both?</p>
             </div>
           </button>
 
@@ -319,9 +340,10 @@
       <header class="meth__head">
         <div class="kicker">Behind the map</div>
         <h2 class="meth__title">How this thing was built, and why we forecast 2027 and 2030.</h2>
-        <p class="meth__lede">Round 7 splits credit-desert prediction into two layers: one that predicts as well as
-          possible, one that only uses things you could change. The split is the project. Below: the architecture, the
-          levers that mattered, the COVID break, and what we still can't see.</p>
+        <p class="meth__lede">This dashboard splits credit-desert prediction into two layers: one that shows whether
+          demographics and environment are driving credit risk, and one that isolates lending-environment variables people
+          could change. The split is the project. Below: the architecture, the levers that mattered, the COVID break, and
+          what we still can't see.</p>
       </header>
 
       <div class="meth__horizonSwitch" role="group" aria-label="Methodology view horizon">
@@ -380,19 +402,19 @@
         <div class="meth__num">01</div>
         <div class="meth__body">
           <h3 class="meth__h">Two layers, one panel.</h3>
-          <p class="accordion__hook">Model 1 uses every available signal for the best possible forecast; Model 2 uses
-            only the 20 features a policymaker could build or fund, residualized against demographics.</p>
+          <p class="accordion__hook">Model 1 is a status-quo lens for demographic and environmental risk; Model 2
+            isolates lending-environment variables people could build, fund, or move.</p>
           <button class="accordion__toggle" aria-expanded="false" aria-label="Toggle: Two layers, one panel"><i
               class="accordion__chevron" aria-hidden="true">&#9658;</i>
             Details</button>
           <div class="accordion__body">
             <p>Both models train on the same tract-year panel, <span class="mono">2009&ndash;2024</span>, averaged
-              across 8 time-split tests. <b>Model 1</b> gets all 39 features, including supply-side signals that are
-              partly downstream of the outcome. <b>Model 2</b> gets only features a policymaker could actually move:
-              twenty levers, residualized against demographics so the model has to find lever signal independent of who
-              lives there.</p>
-            <p>The Diagnostic lens gives the best forecast, but won&rsquo;t tell you what to do. The Influenceable lens
-              is a quieter forecast, but every signal in it is something you could fund or build.</p>
+              across 8 time-split tests. <b>Model 1</b> focuses on demographic and environmental conditions, giving us a
+              magnifying glass into whether the status quo is driving credit risk. <b>Model 2</b> focuses on twenty
+              lending-environment levers, residualized against demographics so the model has to find lever signal
+              independent of who lives there.</p>
+            <p>The Diagnostic lens helps us see social and economic pressure. The Influenceable lens helps us find places
+              where movable lending-access variables are driving risk.</p>
           </div>
         </div>
         <div class="meth__viz">
@@ -459,7 +481,7 @@
             <div class="meth__modelSwitch-controls" role="group" aria-label="Model for methodology cards">
               <button class="methModelBtn is-active" type="button" data-meth-model="diagnostic" aria-pressed="true">
                 <span class="methModelBtn__eyebrow mono">Diagnostic</span>
-                <span class="methModelBtn__label">Full 39-feature model</span>
+                <span class="methModelBtn__label">Status-quo feature set</span>
               </button>
               <button class="methModelBtn" type="button" data-meth-model="influenceable" aria-pressed="false">
                 <span class="methModelBtn__eyebrow mono">Influenceable</span>
@@ -564,7 +586,7 @@
                 per-fold</span></div>
             <div class="lim__row"><span class="lim__k">Eval</span><span class="lim__v mono">8 time-split tests, no
                 leakage</span></div>
-            <div class="lim__row"><span class="lim__k">Audience</span><span class="lim__v">BUS 410, Round 7</span></div>
+            <div class="lim__row"><span class="lim__k">Audience</span><span class="lim__v">BUS 410</span></div>
           </div>
         </div>
       </article>
@@ -572,7 +594,7 @@
       <footer class="meth__foot">
         <div class="kicker">Colophon</div>
         <p>Bricolage Grotesque, Manrope, and Recursive (Casual axis) via Google Fonts. Tiles by CARTO and OpenStreetMap.
-          Map by MapLibre GL. Data: HMDA, FDIC SOD, SBA SSBCI, U.S. Census ACS, NCUA. Built for BUS 410, Round 7.
+          Map by MapLibre GL. Data: HMDA, FDIC SOD, SBA SSBCI, U.S. Census ACS, NCUA. Built for BUS 410.
           kyng.pinx@gmail.com.
           <br>
           andrew.t.lau101@gmail.com.
@@ -595,32 +617,30 @@
         <div class="drawer__fips mono num" id="drawerFips">–</div>
         <div class="drawer__sub" id="drawerSub">–</div>
         <div class="drawer__meta mono" id="drawerMeta" hidden></div>
-        <p class="drawer__intro" id="drawerIntro">
-          One U.S. county, shown as a population-weighted rollup of the tracts inside it.
-          Every prediction below estimates the chance this geography becomes
-          a small-business credit desert by the year shown.
-        </p>
+        <p class="drawer__intro" id="drawerIntro">County rollup of tract-level credit-desert risk.</p>
       </header>
 
       <div class="drawer__rule"></div>
 
       <section class="drawer__sect">
         <div class="kicker drawer__sect-h" id="drawerForecastLabel">Forecasts for this county</div>
-        <p class="drawer__hint">
-          Two lenses, two horizons. The <em>Diagnostic</em> lens uses every
-          signal available, including ones you can't change (race, income,
-          poverty). The <em>Influenceable</em> lens only uses signals that
-          local action can move (branch access, mission lender presence,
-          state programs). The cell with the colored border is what's
-          currently shown on the map.
-        </p>
+        <p class="drawer__hint">Two lenses, two horizons. Coral border = what the map is showing now.</p>
+        <div class="drawer__detail" data-accordion>
+          <button class="accordion__toggle drawer__why" aria-expanded="false"
+            aria-label="Toggle forecast grid details"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+            Why?</button>
+          <div class="accordion__body">
+            <p>Diagnostic reads demographic and environmental status quo: whether the area's social and economic
+              conditions are driving credit risk. Influenceable reads lending-environment variables people can move.
+              County mode is a population-weighted rollup of tract predictions.</p>
+          </div>
+        </div>
         <div class="drawer__grid" id="drawerGrid"></div>
       </section>
 
       <section id="drawerCountyTopWrap" class="drawer__sect" hidden>
         <div class="kicker drawer__sect-h">Top tracts inside this county</div>
-        <p class="drawer__hint">Highest-risk tracts at the active model and horizon. Use tract mode to inspect any one
-          of them directly.</p>
+        <p class="drawer__hint">Highest-risk tracts for the active lens and horizon.</p>
         <ol class="toptracts" id="drawerCountyTopTracts"></ol>
       </section>
 
@@ -635,20 +655,23 @@
       <section class="drawer__sect">
         <div class="kicker drawer__sect-h">What's pushing this prediction · <span id="drawerShapHz">Diagnostic · 2027
             forecast</span></div>
-        <p class="drawer__hint">
-          The five conditions in this geography's data that move the forecast
-          most. ▲ adds percentage points to predicted risk; ▼ removes
-          percentage points. Bar length shows how much, relative to the others
-          on this list.
-        </p>
+        <p class="drawer__hint">Top drivers for the active lens. ▲ adds risk; ▼ lowers it.</p>
+        <div class="drawer__detail" data-accordion>
+          <button class="accordion__toggle drawer__why" aria-expanded="false"
+            aria-label="Toggle driver details"><i class="accordion__chevron" aria-hidden="true">&#9658;</i>
+            Why?</button>
+          <div class="accordion__body">
+            <p>These are the strongest local contributors in the active forecast. Values are percentage-point pushes,
+              bars are relative within this list, and scenario sliders can change the drawer's adjusted drivers.</p>
+          </div>
+        </div>
         <ol class="drawer__shap" id="drawerShap"></ol>
       </section>
 
       <div class="drawer__rule"></div>
 
       <footer class="drawer__foot">
-        Click the highlighted tract on the map again to close. Toggle Model
-        or Horizon up top to see the four forecasts and drivers update live.
+        Toggle model or horizon to update this drawer live.
       </footer>
     </div>
   </aside>

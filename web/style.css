@@ -617,6 +617,18 @@ html[data-theme="light"] body[data-model="m2"] .legend__bar {
   color: var(--tx-2);
   margin: 0;
 }
+.rail__detail .accordion__body p {
+  font-family: var(--ff-body);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--tx-3);
+  margin: 0 0 var(--s-2);
+}
+.rail__why {
+  min-height: auto;
+  margin-top: 2px;
+  color: var(--coral);
+}
 
 .rail__bignums {
   display: grid;
@@ -2511,6 +2523,18 @@ body.is-feature-dict-open {
   color: var(--tx);
   font-style: normal;
   font-weight: 600;
+}
+.drawer__detail .accordion__body p {
+  font-family: var(--ff-body);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--tx-2);
+  margin: 0 0 var(--s-2);
+}
+.drawer__why {
+  min-height: auto;
+  margin-top: -2px;
+  color: var(--coral);
 }
 .drawcell__sub {
   font-family: var(--ff-body);

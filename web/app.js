@@ -68,10 +68,6 @@
     h6: "2030 scenario",
   };
   const HZ_YEAR = { h3: "2027", h6: "2030" };
-  const HZ_DESC = {
-    h3: "2027 forecast: trained on data through 2021, predicts state at 2024. Federal CRA reporting lags about 2 years, so this is the soonest-actionable forecast.",
-    h6: "2030 scenario: trained on data through 2018, predicts state at 2024. Same target year, longer reach; a stress-test scenario for the 2030 horizon.",
-  };
   const HZ_META = {
     h3: "2027 forecast · trained on data through 2021 · target 2024",
     h6: "2030 scenario · trained on data through 2018 · target 2024",
@@ -82,7 +78,7 @@
       label: "County",
       plural: "counties",
       detail: "County detail",
-      intro: "One U.S. county, shown as a population-weighted rollup of the tracts inside it. Every prediction below estimates the chance this county becomes a small-business credit desert by the year shown.",
+      intro: "Population-weighted tract rollup for county-level credit-desert risk.",
       forecastLabel: "Forecasts for this county",
       scenarioTitle: "Counties that crossed the high-risk line",
       histLabel: "Counties per risk decile",
@@ -92,7 +88,7 @@
       label: "Tract",
       plural: "tracts",
       detail: "Tract detail",
-      intro: "One U.S. census tract, roughly a neighborhood of 4,000 people. Every prediction below estimates the chance this neighborhood becomes a small-business credit desert by the year shown.",
+      intro: "Neighborhood-level credit-desert risk for this census tract.",
       forecastLabel: "Forecasts for this neighborhood",
       scenarioTitle: "Tracts that crossed the high-risk line",
       histLabel: "Tracts per risk decile",
@@ -196,7 +192,7 @@
   // Plain-English explainer for every feature that may show up in SHAP top-N.
   // Each entry: {what: definition, read: how to interpret}.
   const FEATURE_DESCRIPTION = {
-    // ─── Round 7 / Model 2 — branch geography ────────────────────────────
+    // ─── Influenceable lens — branch geography ────────────────────────────
     distance_to_nearest_bank_branch: {
       what: "Straight-line distance from the tract centroid to the closest FDIC-insured bank branch, in miles.",
       read: "Higher means less physical access to a bank. The single most important feature in the influenceable model.",
@@ -209,7 +205,7 @@
       what: "Count of bank branches within 10 miles that disappeared in the prior 3 years.",
       read: "Higher means access is eroding; a leading indicator of credit-desert formation.",
     },
-    // ─── Round 7 — MDI / mission lender ──────────────────────────────────
+    // ─── Influenceable lens — MDI / mission lender ────────────────────────
     mdi_branches_within_10mi: {
       what: "Count of Minority Depository Institution (MDI) branches within 10 miles. MDIs are FDIC-insured banks majority-owned by minority groups or with majority-minority boards.",
       read: "Higher means stronger mission-lender presence. MDIs disproportionately serve underserved markets.",
@@ -226,12 +222,12 @@
       what: "1 if any MDI is headquartered in the tract's county; 0 otherwise.",
       read: "1 means there's a mission-lender presence at the county scale.",
     },
-    // ─── Round 7 — microlender / SBA ─────────────────────────────────────
+    // ─── Influenceable lens — microlender / SBA ───────────────────────────
     microloan_intermediary_within_25mi: {
       what: "Count of SBA-designated microlender intermediaries within 25 miles. These are non-bank organizations that disburse small SBA-backed loans.",
       read: "Higher means stronger small-loan ecosystem for tiny businesses.",
     },
-    // ─── Round 7 — SSBCI state policy ────────────────────────────────────
+    // ─── Influenceable lens — SSBCI state policy ──────────────────────────
     ssbci_active: {
       what: "1 if the State Small Business Credit Initiative (SSBCI) had an active program in this state-year; 0 otherwise. SSBCI 1.0 ran 2011–2017; SSBCI 2.0 runs 2022–present.",
       read: "1 means the federal-state program supporting small-business lenders was active.",
@@ -248,7 +244,7 @@
       what: "Subset of program_count restricted to capital-deployment programs (loan guarantee, collateral support, loan participation, capital access). Excludes venture.",
       read: "Higher = more state-backed loan support specifically.",
     },
-    // ─── Round 7 — residualized concentration / lender mix ───────────────
+    // ─── Influenceable lens — residualized concentration / lender mix ─────
     pct_loans_from_community_banks_resid: {
       what: "Share of CRA small-business loans that came from community banks (assets < $10B), residualized against the tract's lender count to remove mechanical leakage.",
       read: "Higher (positive residual) means above-expected community-bank presence given the tract's lender count. A sign of healthy relationship lending.",
@@ -281,7 +277,7 @@
       what: "Herfindahl-Hirschman Index of CRA lenders in the tract (sum of squared market shares), residualized. HHI ranges 0 (perfect competition) to 1 (monopoly).",
       read: "Higher = above-expected market concentration. Concentrated markets are more fragile.",
     },
-    // ─── Round 5 / Model 1 — ACS demographics ────────────────────────────
+    // ─── Diagnostic lens — ACS demographics ───────────────────────────────
     population: {
       what: "Total population in the tract (ACS 5-year estimate).",
       read: "Smaller populations correlate with thinner credit markets; fewer borrowers means fewer lenders.",
@@ -334,7 +330,7 @@
       what: "USDA Rural-Urban Commuting Area code (1-10): 1-3 metropolitan, 4-6 micropolitan, 7-9 small town, 10 isolated rural.",
       read: "Higher = more rural. The model uses this as a finer-grained urban-to-rural spectrum.",
     },
-    // ─── Round 5 — FDIC concentration ────────────────────────────────────
+    // ─── Diagnostic lens — FDIC concentration ─────────────────────────────
     fdic_deposit_hhi: {
       what: "Herfindahl-Hirschman Index of bank deposits at the COUNTY level (FDIC Summary of Deposits).",
       read: "Higher = more concentrated deposit market. Often correlates with concentrated lending.",
@@ -359,7 +355,7 @@
       what: "3-year change in the top bank's share.",
       read: "Positive = sustained dominance growth.",
     },
-    // ─── Round 5 — CRA churn / county concentration ──────────────────────
+    // ─── Diagnostic lens — CRA churn / county concentration ───────────────
     cra_lender_entries_1yr: {
       what: "Count of new CRA lenders that started reporting in this tract in the past year.",
       read: "Higher = new lenders entering the market. Healthy.",
@@ -395,7 +391,7 @@
       what: "County-level: largest lender's share of CRA loans by dollar amount.",
       read: "Higher = one lender deploys most of the dollars.",
     },
-    // ─── Round 5 — HMDA mortgage features ────────────────────────────────
+    // ─── Diagnostic lens — HMDA mortgage features ─────────────────────────
     n_applications: { what: "HMDA mortgage applications in the tract-year.", read: "Higher = more borrowing activity. (Mortgage, not small-business.)" },
     n_originated: { what: "HMDA mortgage originations.", read: "Higher = more loans actually approved." },
     n_denied: { what: "HMDA mortgage denials.", read: "Higher = more rejected applicants." },
@@ -624,7 +620,7 @@
     setText("drawerKicker", meta.detail);
     setText("drawerForecastLabel", meta.forecastLabel);
     setText("drawerIntro", meta.intro);
-    const histCaption = `${meta.histLabel} · active model × horizon. Long left tail = most ${meta.plural} read low risk; the rightmost bar is the high-risk shoulder.`;
+    const histCaption = `${meta.histLabel} for the active lens and horizon.`;
     setText("histCaption", histCaption);
     const mapEl = document.getElementById("map");
     if (mapEl) mapEl.setAttribute("aria-label", `Choropleth map of U.S. ${meta.plural} colored by risk`);
@@ -934,7 +930,10 @@
       const wasOpen = !overlay.hidden;
       current = i;
       const card = cards[i];
-      const selector = card.dataset.spotlightTarget;
+      const isCompareGuide = card.dataset.guideAction === "compare-models";
+      const selector = isCompareGuide && STATE.pinnedFeature
+        ? ".ovl--toggles .toggrp:first-child"
+        : card.dataset.spotlightTarget;
       const target = document.querySelector(selector);
       if (!target) return;
       activeSelector = selector;
@@ -947,6 +946,11 @@
       kicker.textContent = `Step ${String(i + 1).padStart(2, "0")} of ${cards.length}`;
       titleEl.textContent = card.querySelector(".guide__h")?.textContent || "";
       bodyEl.innerHTML = card.querySelector(".accordion__body")?.innerHTML || "";
+      if (isCompareGuide) {
+        bodyEl.innerHTML = STATE.pinnedFeature
+          ? "<p>Keep the drawer open and switch Diagnostic ↔ Influenceable. The comparison shows whether risk is coming from status-quo conditions, lending-environment variables, or both.</p>"
+          : "<p>Click a county or tract first. The drawer will hold that place in view so you can compare Diagnostic and Influenceable without chasing hover state.</p>";
+      }
 
       // show overlay
       overlay.hidden = false;
@@ -2301,9 +2305,9 @@
         const above = Math.round(c.r);          // % of state's tracts THIS tract beats
         const below = 100 - above;               // % above this tract
         if (above >= 50) {
-          rankTxt = `Higher risk than ${above}% of ${stAbbr || "state"} ${activeGeoMeta().plural}`;
+          rankTxt = `Top ${Math.max(1, below)}% in ${stAbbr || "state"}`;
         } else {
-          rankTxt = `Lower risk than ${below}% of ${stAbbr || "state"} ${activeGeoMeta().plural}`;
+          rankTxt = `Bottom ${Math.max(1, above)}% in ${stAbbr || "state"}`;
         }
       }
       const barW = (c.r == null) ? 0 : Math.max(1, Math.min(100, c.r));
@@ -2311,7 +2315,7 @@
       div.innerHTML = `
         <div class="drawcell__head">${MODEL_NAME[c.m]} · ${YEAR_OF[c.h]}</div>
         <div class="drawcell__v">${valTxt}</div>
-        <div class="drawcell__sub">chance of becoming a credit desert</div>
+        <div class="drawcell__sub">predicted risk</div>
         <div class="drawcell__pct">${rankTxt}</div>
         <div class="drawcell__bar"><div class="drawcell__bar-fill" style="width: ${barW}%;"></div></div>
       `;
@@ -2364,33 +2368,33 @@
   function divergenceCopy(m1, m2) {
     if (m1 >= 0.05 && m2 < 0.02) {
       return {
-        headline: "The two lenses disagree, and the structural lens flags higher risk",
-        body: "The Diagnostic lens reads this neighborhood as risky because of structural conditions, poverty, demographics, weak labor market. But the Influenceable lens, which only looks at the lending environment, sees a relatively healthy local market. Practical reading: this place has structural disadvantage, but credit access here is better than the demographic profile would predict.",
+        headline: "Status-quo risk is higher than lending-environment risk",
+        body: "Diagnostic flags the area's social and economic environment. Influenceable sees less lending-access fragility, so the available levers may not fully reach the risk.",
       };
     }
     if (m1 < 0.02 && m2 >= 0.05) {
       return {
-        headline: "The two lenses disagree, and the lending-environment lens flags higher risk",
-        body: "The Diagnostic lens reads this neighborhood as low-risk because the demographic profile looks ordinary. But the Influenceable lens sees a fragile lending environment: thin local lender depth, sparse mission-lender presence, or weakening branch access. Practical reading: this place's credit access could deteriorate faster than the demographics would suggest, which is exactly the kind of signal the Influenceable model is designed to surface.",
+        headline: "Lending-environment risk is higher than status-quo risk",
+        body: "Diagnostic reads the broader context as lower risk. Influenceable sees weak branch access, mission-lender reach, lender depth, or related credit-access signals.",
       };
     }
     if (m1 >= 0.05 && m2 >= 0.05) {
       const higher = m2 > m1 ? "Influenceable" : "Diagnostic";
       return {
         headline: "Both lenses see elevated risk; they differ on how much",
-        body: "Both lenses flag this neighborhood as elevated risk. The " + higher + " lens reads it higher because the lending-environment signals here are weaker than what the demographic profile alone would predict. Local action on lending access could matter here.",
+        body: "Both lenses flag this place. The " + higher + " lens reads it higher, so compare the local drivers before treating the risk as one kind of problem.",
       };
     }
     if (m1 < 0.02 && m2 < 0.02) {
       return {
         headline: "Both lenses see this as low-risk overall",
-        body: "Both lenses see this as low-risk overall. The small disagreement is not load-bearing; either model is fine for this neighborhood.",
+        body: "The disagreement is small. This place is not where either lens sees the strongest pressure.",
       };
     }
     const higher = m2 > m1 ? "Influenceable" : "Diagnostic";
     return {
       headline: "The two lenses disagree on this neighborhood",
-      body: "The " + higher + " lens reads this neighborhood as higher risk than the other lens does. The disagreement comes from one model seeing a signal the other does not, either structural disadvantage or lending-environment fragility. Read both numbers together rather than relying on one.",
+      body: "The " + higher + " lens reads this place as higher risk. Use the gap to separate status-quo pressure from lending-environment pressure.",
     };
   }
 
@@ -2883,7 +2887,6 @@
     document.getElementById("legendHorizon").textContent = HZ_YEAR[STATE.activeHorizon] + " forecast";
     document.getElementById("railHorizon").textContent =
       STATE.activeHorizon === "h3" ? "2027 forecast" : "2030 scenario";
-    document.getElementById("railHorizonDesc").textContent = HZ_DESC[STATE.activeHorizon];
   }
 
   // ---------------------------------------------------------------------
@@ -2901,8 +2904,8 @@
       m === "m1" ? "Diagnostic" : "Influenceable";
     document.getElementById("railModelDesc").textContent =
       m === "m1"
-        ? "All 39 features. The strongest predictor of future credit deserts, but it leans on supply-side signal we can't move."
-        : "Twenty influenceable features, residualized against demographics. A quieter forecast, but every signal in it is something policy could fund or build.";
+        ? "Status-quo lens: demographics and environmental conditions show whether local context is driving credit risk."
+        : "Lending-environment lens: movable credit-access variables show where risk is tied to things people can change.";
 
     if (!head) {
       document.getElementById("bigAuc").textContent = "–";
