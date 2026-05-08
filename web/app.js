@@ -13,42 +13,48 @@
 
   // Lever feature → display label + ablation group key
   const LEVERS = [
-    { key: "distance_to_nearest_bank_branch",
+    {
+      key: "distance_to_nearest_bank_branch",
       label: "Bank branch distance",
       unit: "mi",
       group: "branch_access",
       polarity: -1,         // farther → MORE risk (we model -polarity*z*w)
       hint: "Median miles to nearest branch.",
     },
-    { key: "branches_within_5mi",
+    {
+      key: "branches_within_5mi",
       label: "Branches within 5 mi",
       unit: "branches",
       group: "branch_access",
       polarity: +1,
       hint: "More branches → less risk.",
     },
-    { key: "mdi_branches_within_25mi",
+    {
+      key: "mdi_branches_within_25mi",
       label: "MDI branch reach",
       unit: "MDI within 25 mi",
       group: "mdi_mission_lender",
       polarity: +1,
       hint: "Minority Depository Institution presence.",
     },
-    { key: "ssbci_active",
+    {
+      key: "ssbci_active",
       label: "SSBCI program coverage",
       unit: "share active",
       group: "ssbci_state_policy",
       polarity: +1,
       hint: "State Small Business Credit Initiative.",
     },
-    { key: "microloan_intermediary_within_25mi",
+    {
+      key: "microloan_intermediary_within_25mi",
       label: "Microlender ecosystem",
       unit: "intermediaries",
       group: "microlender_ecosystem",
       polarity: +1,
       hint: "SBA microloan intermediaries within 25 mi.",
     },
-    { key: "lender_hhi_tract_resid",
+    {
+      key: "lender_hhi_tract_resid",
       label: "Lender concentration (resid.)",
       unit: "HHI deviation",
       group: "residualized_concentration",
@@ -62,10 +68,6 @@
     h6: "2030 scenario",
   };
   const HZ_YEAR = { h3: "2027", h6: "2030" };
-  const HZ_DESC = {
-    h3: "2027 forecast: trained on data through 2021, predicts state at 2024. Federal CRA reporting lags about 2 years, so this is the soonest-actionable forecast.",
-    h6: "2030 scenario: trained on data through 2018, predicts state at 2024. Same target year, longer reach; a stress-test scenario for the 2030 horizon.",
-  };
   const HZ_META = {
     h3: "2027 forecast · trained on data through 2021 · target 2024",
     h6: "2030 scenario · trained on data through 2018 · target 2024",
@@ -76,7 +78,7 @@
       label: "County",
       plural: "counties",
       detail: "County detail",
-      intro: "One U.S. county, shown as a population-weighted rollup of the tracts inside it. Every prediction below estimates the chance this county becomes a small-business credit desert by the year shown.",
+      intro: "Population-weighted tract rollup for county-level credit-desert risk.",
       forecastLabel: "Forecasts for this county",
       scenarioTitle: "Counties that crossed the high-risk line",
       histLabel: "Counties per risk decile",
@@ -86,7 +88,7 @@
       label: "Tract",
       plural: "tracts",
       detail: "Tract detail",
-      intro: "One U.S. census tract, roughly a neighborhood of 4,000 people. Every prediction below estimates the chance this neighborhood becomes a small-business credit desert by the year shown.",
+      intro: "Neighborhood-level credit-desert risk for this census tract.",
       forecastLabel: "Forecasts for this neighborhood",
       scenarioTitle: "Tracts that crossed the high-risk line",
       histLabel: "Tracts per risk decile",
@@ -101,6 +103,7 @@
     activeHorizon: "h3",          // "h3" or "h6"
     methHorizon: "h3",            // independent horizon for the methodology viz panels
     methHorizonLocked: false,     // true after first user interaction with the meth switcher
+    methModel: "diagnostic",      // independent model for methodology cards 02 + 02b
     focusedState: null,           // state abbreviation, or null
     sliderShifts: {},             // key → z-score shift
     feat: null,                   // feature_stats.json (flat: { key: {...} })
@@ -128,7 +131,7 @@
     // Cleared (set null) when all sliders are at 0. When non-null, renderDrawer
     // and renderDrawerShap read from these instead of the raw feature properties.
     scenarioAdjustedRisks: null,  // { m1_h3, m1_h6, m2_h3, m2_h6 }
-    scenarioAdjustedShap: null,   // { m1_h3: [[f,v],...], m1_h6:..., m2_h3:..., m2_h6:... }
+    scenarioAdjustedShap: null,   // { m1_h3: [[f,logit_value],...], m1_h6:..., m2_h3:..., m2_h6:... }
     scenarioActiveLevers: null,   // [{label, z}, ...] for the plain-language note
   };
 
@@ -189,7 +192,7 @@
   // Plain-English explainer for every feature that may show up in SHAP top-N.
   // Each entry: {what: definition, read: how to interpret}.
   const FEATURE_DESCRIPTION = {
-    // ─── Round 7 / Model 2 — branch geography ────────────────────────────
+    // ─── Influenceable lens — branch geography ────────────────────────────
     distance_to_nearest_bank_branch: {
       what: "Straight-line distance from the tract centroid to the closest FDIC-insured bank branch, in miles.",
       read: "Higher means less physical access to a bank. The single most important feature in the influenceable model.",
@@ -202,7 +205,7 @@
       what: "Count of bank branches within 10 miles that disappeared in the prior 3 years.",
       read: "Higher means access is eroding; a leading indicator of credit-desert formation.",
     },
-    // ─── Round 7 — MDI / mission lender ──────────────────────────────────
+    // ─── Influenceable lens — MDI / mission lender ────────────────────────
     mdi_branches_within_10mi: {
       what: "Count of Minority Depository Institution (MDI) branches within 10 miles. MDIs are FDIC-insured banks majority-owned by minority groups or with majority-minority boards.",
       read: "Higher means stronger mission-lender presence. MDIs disproportionately serve underserved markets.",
@@ -219,15 +222,15 @@
       what: "1 if any MDI is headquartered in the tract's county; 0 otherwise.",
       read: "1 means there's a mission-lender presence at the county scale.",
     },
-    // ─── Round 7 — microlender / SBA ─────────────────────────────────────
+    // ─── Influenceable lens — microlender / SBA ───────────────────────────
     microloan_intermediary_within_25mi: {
       what: "Count of SBA-designated microlender intermediaries within 25 miles. These are non-bank organizations that disburse small SBA-backed loans.",
       read: "Higher means stronger small-loan ecosystem for tiny businesses.",
     },
-    // ─── Round 7 — SSBCI state policy ────────────────────────────────────
+    // ─── Influenceable lens — SSBCI state policy ──────────────────────────
     ssbci_active: {
       what: "1 if the State Small Business Credit Initiative (SSBCI) had an active program in this state-year; 0 otherwise. SSBCI 1.0 ran 2011–2017; SSBCI 2.0 runs 2022–present.",
-      read: "1 means the federal-state program supporting small-business lenders was active.",
+      read: "A 1 in the data means the federal-state program supporting small-business lenders was active.",
     },
     ssbci_2_0_active: {
       what: "1 specifically for SSBCI 2.0 (2022+). Distinct from SSBCI 1.0 because the program design shifted toward equity investments.",
@@ -241,7 +244,7 @@
       what: "Subset of program_count restricted to capital-deployment programs (loan guarantee, collateral support, loan participation, capital access). Excludes venture.",
       read: "Higher = more state-backed loan support specifically.",
     },
-    // ─── Round 7 — residualized concentration / lender mix ───────────────
+    // ─── Influenceable lens — residualized concentration / lender mix ─────
     pct_loans_from_community_banks_resid: {
       what: "Share of CRA small-business loans that came from community banks (assets < $10B), residualized against the tract's lender count to remove mechanical leakage.",
       read: "Higher (positive residual) means above-expected community-bank presence given the tract's lender count. A sign of healthy relationship lending.",
@@ -274,7 +277,7 @@
       what: "Herfindahl-Hirschman Index of CRA lenders in the tract (sum of squared market shares), residualized. HHI ranges 0 (perfect competition) to 1 (monopoly).",
       read: "Higher = above-expected market concentration. Concentrated markets are more fragile.",
     },
-    // ─── Round 5 / Model 1 — ACS demographics ────────────────────────────
+    // ─── Diagnostic lens — ACS demographics ───────────────────────────────
     population: {
       what: "Total population in the tract (ACS 5-year estimate).",
       read: "Smaller populations correlate with thinner credit markets; fewer borrowers means fewer lenders.",
@@ -327,7 +330,7 @@
       what: "USDA Rural-Urban Commuting Area code (1-10): 1-3 metropolitan, 4-6 micropolitan, 7-9 small town, 10 isolated rural.",
       read: "Higher = more rural. The model uses this as a finer-grained urban-to-rural spectrum.",
     },
-    // ─── Round 5 — FDIC concentration ────────────────────────────────────
+    // ─── Diagnostic lens — FDIC concentration ─────────────────────────────
     fdic_deposit_hhi: {
       what: "Herfindahl-Hirschman Index of bank deposits at the COUNTY level (FDIC Summary of Deposits).",
       read: "Higher = more concentrated deposit market. Often correlates with concentrated lending.",
@@ -352,7 +355,7 @@
       what: "3-year change in the top bank's share.",
       read: "Positive = sustained dominance growth.",
     },
-    // ─── Round 5 — CRA churn / county concentration ──────────────────────
+    // ─── Diagnostic lens — CRA churn / county concentration ───────────────
     cra_lender_entries_1yr: {
       what: "Count of new CRA lenders that started reporting in this tract in the past year.",
       read: "Higher = new lenders entering the market. Healthy.",
@@ -388,7 +391,7 @@
       what: "County-level: largest lender's share of CRA loans by dollar amount.",
       read: "Higher = one lender deploys most of the dollars.",
     },
-    // ─── Round 5 — HMDA mortgage features ────────────────────────────────
+    // ─── Diagnostic lens — HMDA mortgage features ─────────────────────────
     n_applications: { what: "HMDA mortgage applications in the tract-year.", read: "Higher = more borrowing activity. (Mortgage, not small-business.)" },
     n_originated: { what: "HMDA mortgage originations.", read: "Higher = more loans actually approved." },
     n_denied: { what: "HMDA mortgage denials.", read: "Higher = more rejected applicants." },
@@ -453,13 +456,65 @@
 
 
   // ---------------------------------------------------------------------
-  // BASE MAP STYLE — dark, no labels on basemap, hairline borders
+  // THEME HELPERS
+  // ---------------------------------------------------------------------
+  const isDarkTheme = () => document.documentElement.dataset.theme !== "light";
+  const nullFillColor = () => isDarkTheme() ? "#0c1318" : "#f2f1ee";
+  const coralColor = () => isDarkTheme() ? "#fc5855" : "#cc3d3a";
+  const edgeColor = () => isDarkTheme() ? "#0a1319" : "#c2cad4";
+  const bgColor = () => isDarkTheme() ? "#040c13" : "#f7f5f0";
+
+  // Choropleth ramps — paper→deep-accent for light, dark→bright-accent for dark.
+  const RAMPS_DARK = {
+    m1: [
+      [0.00, "#0e171e"],
+      [0.02, "#332e12"],
+      [0.05, "#655406"],
+      [0.10, "#987500"],
+      [0.20, "#c89600"],
+      [0.40, "#eeb300"],
+      [1.00, "#ffd046"],
+    ],
+    m2: [
+      [0.00, "#0e171e"],
+      [0.02, "#193b22"],
+      [0.05, "#336627"],
+      [0.10, "#56932b"],
+      [0.20, "#78bb2f"],
+      [0.40, "#a4e550"],
+      [1.00, "#c3ff68"],
+    ],
+  };
+  const RAMPS_LIGHT = {
+    m1: [
+      [0.00, "#f7f5f0"],
+      [0.02, "#f0e8c9"],
+      [0.05, "#e8d480"],
+      [0.10, "#d6b333"],
+      [0.20, "#a87f00"],
+      [0.40, "#7a5800"],
+      [1.00, "#523900"],
+    ],
+    m2: [
+      [0.00, "#f7f5f0"],
+      [0.02, "#dde8c4"],
+      [0.05, "#bcd385"],
+      [0.10, "#92b245"],
+      [0.20, "#6c8a1d"],
+      [0.40, "#4a6210"],
+      [1.00, "#2e3e08"],
+    ],
+  };
+  const ramps = () => isDarkTheme() ? RAMPS_DARK : RAMPS_LIGHT;
+
+  // ---------------------------------------------------------------------
+  // BASE MAP STYLE — dual basemap sources for dark/light switching
   // ---------------------------------------------------------------------
   const BASE_STYLE = {
     version: 8,
     glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
     sources: {
-      carto: {
+      "carto-dark": {
         type: "raster",
         tiles: [
           "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
@@ -470,16 +525,29 @@
         tileSize: 256,
         attribution: "© OpenStreetMap contributors © CARTO",
       },
+      "carto-light": {
+        type: "raster",
+        tiles: [
+          "https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+          "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+          "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+          "https://d.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+        ],
+        tileSize: 256,
+        attribution: "© OpenStreetMap contributors © CARTO",
+      },
     },
     layers: [
-      { id: "bg", type: "background", paint: { "background-color": "#040c13" } },
-      { id: "base", type: "raster", source: "carto",
-        paint: {
-          "raster-opacity": 0.55,
-          "raster-saturation": -0.4,
-          "raster-contrast": -0.05,
-          "raster-brightness-min": 0.02,
-        }
+      { id: "bg", type: "background", paint: { "background-color": bgColor() } },
+      {
+        id: "base-dark", type: "raster", source: "carto-dark",
+        layout: { visibility: isDarkTheme() ? "visible" : "none" },
+        paint: { "raster-opacity": 0.55, "raster-saturation": -0.4, "raster-contrast": -0.05, "raster-brightness-min": 0.02 }
+      },
+      {
+        id: "base-light", type: "raster", source: "carto-light",
+        layout: { visibility: isDarkTheme() ? "none" : "visible" },
+        paint: { "raster-opacity": 0.50, "raster-saturation": -0.20, "raster-contrast": 0.05 }
       },
     ],
   };
@@ -552,7 +620,7 @@
     setText("drawerKicker", meta.detail);
     setText("drawerForecastLabel", meta.forecastLabel);
     setText("drawerIntro", meta.intro);
-    const histCaption = `${meta.histLabel} · active model × horizon. Long left tail = most ${meta.plural} read low risk; the rightmost bar is the high-risk shoulder.`;
+    const histCaption = `${meta.histLabel} for the active lens and horizon.`;
     setText("histCaption", histCaption);
     const mapEl = document.getElementById("map");
     if (mapEl) mapEl.setAttribute("aria-label", `Choropleth map of U.S. ${meta.plural} colored by risk`);
@@ -565,11 +633,11 @@
   }
 
   const rampToExpr = () => {
-    const ramp = RAMPS[STATE.activeModel];
+    const ramp = ramps()[STATE.activeModel];
     const m = riskProp();
     return [
       "case",
-      ["==", ["get", m], null], "#0c1318",
+      ["==", ["get", m], null], nullFillColor(),
       ["interpolate", ["linear"], ["get", m], ...ramp.flat()]
     ];
   };
@@ -578,7 +646,7 @@
   const stateBordersOpacity = () => {
     const base = ["interpolate", ["linear"], ["zoom"], 3, 0.35, 5, 0.45, 8, 0.55, 10, 0.65];
     if (!STATE.focusedState) return base;
-    const dim  = ["interpolate", ["linear"], ["zoom"], 3, 0.25, 5, 0.30, 8, 0.35, 10, 0.40];
+    const dim = ["interpolate", ["linear"], ["zoom"], 3, 0.25, 5, 0.30, 8, 0.35, 10, 0.40];
     return ["case", ["==", ["get", "st"], STATE.focusedState], 0.95, dim];
   };
   const stateBordersWidth = () => {
@@ -590,12 +658,55 @@
   // ---------------------------------------------------------------------
   // BOOT
   // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // THEME SWITCHING
+  // ---------------------------------------------------------------------
+  function applyThemeToMap() {
+    if (!map) return;
+    const dark = isDarkTheme();
+    map.setPaintProperty("bg", "background-color", bgColor());
+    map.setLayoutProperty("base-dark", "visibility", dark ? "visible" : "none");
+    map.setLayoutProperty("base-light", "visibility", dark ? "none" : "visible");
+    const outline = coralColor();
+    const edge = edgeColor();
+    ["counties-outline-hover", "counties-outline-pinned",
+      "tracts-outline-hover", "tracts-outline-pinned"].forEach(id => {
+        if (map.getLayer(id)) map.setPaintProperty(id, "line-color", outline);
+      });
+    ["counties-edge", "tracts-edge"].forEach(id => {
+      if (map.getLayer(id)) map.setPaintProperty(id, "line-color", edge);
+    });
+    // Repaint choropleth fill with theme-appropriate ramp
+    const fillExpr = computeColorExpr();
+    ["counties-fill", "tracts-fill"].forEach(id => {
+      if (map.getLayer(id)) map.setPaintProperty(id, "fill-color", fillExpr);
+    });
+  }
+
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    const meta = document.querySelector("meta[name='theme-color']");
+    if (meta) meta.content = t === "dark" ? "#1c2230" : "#f7f5f0";
+    applyThemeToMap();
+  }
+
+  function initTheme() {
+    const toggle = document.querySelector("[data-theme-toggle]");
+    if (!toggle) return;
+    toggle.addEventListener("click", () => {
+      const next = isDarkTheme() ? "light" : "dark";
+      setTheme(next);
+      localStorage.setItem("theme", next);
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", boot);
 
   async function boot() {
     document.body.dataset.geo = "county";
     document.body.dataset.model = "m1";
     document.body.dataset.horizon = "h3";
+    STATE.methModel = STATE.activeModel === "m2" ? "influenceable" : "diagnostic";
 
     const [feat, dict, states, bbox, ablH3, ablH6, regH3, regH6, prH3, prH6] = await Promise.all([
       fetchOptional("data/feature_stats.json"),
@@ -609,18 +720,20 @@
       fetchOptional("data/pruning_h3.json"),
       fetchOptional("data/pruning_h6.json"),
     ]);
-    STATE.feat    = feat;
+    STATE.feat = feat;
     STATE.featureDictionary = dict;
-    STATE.states  = states;
-    STATE.bbox    = bbox;
-    STATE.abl     = { h3: ablH3, h6: ablH6 };
-    STATE.regime  = { h3: regH3, h6: regH6 };
+    STATE.states = states;
+    STATE.bbox = bbox;
+    STATE.abl = { h3: ablH3, h6: ablH6 };
+    STATE.regime = { h3: regH3, h6: regH6 };
     STATE.pruning = { h3: prH3, h6: prH6 };
+    syncMethodologyModelButtons();
 
-    if (!feat)          document.getElementById('sliders')?.insertAdjacentHTML('afterbegin', '<p class="data-missing">Scenario data unavailable</p>');
-    if (!states)        document.getElementById('topStates')?.insertAdjacentHTML('beforebegin', '<p class="data-missing">State data unavailable</p>');
+    if (!feat) document.getElementById('sliders')?.insertAdjacentHTML('afterbegin', '<p class="data-missing">Scenario data unavailable</p>');
+    if (!states) document.getElementById('topStates')?.insertAdjacentHTML('beforebegin', '<p class="data-missing">State data unavailable</p>');
     if (!ablH3 && !ablH6) document.getElementById('ablChart')?.insertAdjacentHTML('afterbegin', '<p class="data-missing">Ablation data unavailable</p>');
 
+    initTheme();
     initMap();
     initToggles();
     renderHeadline();
@@ -691,19 +804,31 @@
     const cards = [...document.querySelectorAll(".guide__card[data-spotlight-target]")];
     if (!cards.length) return;
 
-    const overlay  = document.getElementById("spotlight");
+    const overlay = document.getElementById("spotlight");
     if (!overlay) return;
-    const ring     = overlay.querySelector(".spotlight__ring");
-    const callout  = overlay.querySelector(".spotlight__callout");
-    const kicker   = overlay.querySelector(".spotlight__kicker");
-    const titleEl  = overlay.querySelector(".spotlight__title");
-    const bodyEl   = overlay.querySelector(".spotlight__body");
-    const prevBtn  = overlay.querySelector(".spotlight__prev");
-    const nextBtn  = overlay.querySelector(".spotlight__next");
+    const ring = overlay.querySelector(".spotlight__ring");
+    const callout = overlay.querySelector(".spotlight__callout");
+    const kicker = overlay.querySelector(".spotlight__kicker");
+    const titleEl = overlay.querySelector(".spotlight__title");
+    const bodyEl = overlay.querySelector(".spotlight__body");
+    const prevBtn = overlay.querySelector(".spotlight__prev");
+    const nextBtn = overlay.querySelector(".spotlight__next");
     const closeBtn = overlay.querySelector(".spotlight__close");
+    const railEl = document.querySelector(".rail");
+    const drawerEl = document.getElementById("drawer");
+    const viewport = window.visualViewport || null;
 
     let current = -1;
-    let rafId   = null;
+    let rafId = null;
+    let activeTarget = null;
+    let activeSelector = "";
+    let settleTimer = null;
+    let settleCleanup = null;
+    let layoutObserver = null;
+
+    function emitDrawerLayoutChange() {
+      window.dispatchEvent(new CustomEvent("drawer-layout-change"));
+    }
 
     // wire card clicks + keyboard
     cards.forEach((card, i) => {
@@ -713,36 +838,119 @@
       });
     });
 
-    prevBtn.addEventListener("click",  () => open((current - 1 + cards.length) % cards.length));
-    nextBtn.addEventListener("click",  () => open((current + 1) % cards.length));
+    prevBtn.addEventListener("click", () => open((current - 1 + cards.length) % cards.length));
+    nextBtn.addEventListener("click", () => open((current + 1) % cards.length));
     closeBtn.addEventListener("click", close);
-
-    overlay.addEventListener("click", (e) => {
-      if (!callout.contains(e.target)) close();
-    });
 
     document.addEventListener("keydown", (e) => {
       if (overlay.hidden) return;
-      if (e.key === "Escape")     close();
+      if (e.key === "Escape") close();
       if (e.key === "ArrowRight") open((current + 1) % cards.length);
-      if (e.key === "ArrowLeft")  open((current - 1 + cards.length) % cards.length);
+      if (e.key === "ArrowLeft") open((current - 1 + cards.length) % cards.length);
     });
+
+    function resolveActiveTarget() {
+      if (activeTarget && activeTarget.isConnected) return activeTarget;
+      if (!activeSelector) return null;
+      activeTarget = document.querySelector(activeSelector);
+      return activeTarget;
+    }
+
+    function measureTargetRect() {
+      const target = resolveActiveTarget();
+      if (!target) return null;
+      const rect = target.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      return rect;
+    }
+
+    function pointInRect(x, y, rect) {
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+
+    function getDrawerRect() {
+      if (!drawerEl || drawerEl.hidden || drawerEl.getAttribute("aria-hidden") === "true") return null;
+      const rect = drawerEl.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      return rect;
+    }
+
+    function schedulePosition() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (current < 0) return;
+        position();
+      });
+    }
+
+    function watchScrollUntilSettled(scrollers, fallbackMs = 520) {
+      const els = scrollers.filter(Boolean);
+      if (!els.length) {
+        schedulePosition();
+        return;
+      }
+
+      let idleTimer = null;
+      const onScroll = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => schedulePosition(), 80);
+      };
+
+      clearTimeout(settleTimer);
+      if (settleCleanup) settleCleanup();
+      els.forEach(el => el.addEventListener("scroll", onScroll, { passive: true }));
+      settleCleanup = () => {
+        els.forEach(el => el.removeEventListener("scroll", onScroll));
+        clearTimeout(idleTimer);
+        settleCleanup = null;
+      };
+      settleTimer = setTimeout(() => {
+        if (settleCleanup) settleCleanup();
+        schedulePosition();
+      }, fallbackMs);
+    }
+
+    function onViewportChange() {
+      if (overlay.hidden) return;
+      schedulePosition();
+    }
+
+    function onDocumentPointerDown(e) {
+      if (overlay.hidden) return;
+      if (callout.contains(e.target)) return;
+      const rect = measureTargetRect();
+      if (rect && pointInRect(e.clientX, e.clientY, rect)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
 
     function open(i) {
       const wasOpen = !overlay.hidden;
       current = i;
-      const card     = cards[i];
-      const selector = card.dataset.spotlightTarget;
-      const target   = document.querySelector(selector);
+      const card = cards[i];
+      const isCompareGuide = card.dataset.guideAction === "compare-models";
+      const selector = isCompareGuide && STATE.pinnedFeature
+        ? ".ovl--toggles .toggrp:first-child"
+        : card.dataset.spotlightTarget;
+      const target = document.querySelector(selector);
       if (!target) return;
+      activeSelector = selector;
+      activeTarget = target;
 
       // collapse guide strip
       if (stripCtrl) stripCtrl.collapse();
 
       // populate callout
-      kicker.textContent  = `Step ${String(i + 1).padStart(2, "0")} of ${cards.length}`;
+      kicker.textContent = `Step ${String(i + 1).padStart(2, "0")} of ${cards.length}`;
       titleEl.textContent = card.querySelector(".guide__h")?.textContent || "";
-      bodyEl.innerHTML    = card.querySelector(".accordion__body")?.innerHTML || "";
+      bodyEl.innerHTML = card.querySelector(".accordion__body")?.innerHTML || "";
+      if (isCompareGuide) {
+        bodyEl.innerHTML = STATE.pinnedFeature
+          ? "<p>Keep the drawer open and switch Diagnostic ↔ Influenceable. The comparison shows whether risk is coming from status-quo conditions, lending-environment variables, or both.</p>"
+          : "<p>Click a county or tract first. The drawer will hold that place in view so you can compare Diagnostic and Influenceable without chasing hover state.</p>";
+      }
 
       // show overlay
       overlay.hidden = false;
@@ -750,90 +958,111 @@
 
       // attach persistent listeners only on first open
       if (!wasOpen) {
-        window.addEventListener("resize", onResize);
-        const rail = document.querySelector(".rail");
-        if (rail) rail.addEventListener("scroll", onRailScroll, { passive: true });
+        window.addEventListener("resize", onViewportChange);
+        window.addEventListener("scroll", onViewportChange, { passive: true });
+        window.addEventListener("drawer-layout-change", onViewportChange);
+        document.addEventListener("pointerdown", onDocumentPointerDown, true);
+        if (viewport) {
+          viewport.addEventListener("resize", onViewportChange);
+          viewport.addEventListener("scroll", onViewportChange);
+        }
+        if (railEl) railEl.addEventListener("scroll", onViewportChange, { passive: true });
+        if (drawerEl) {
+          drawerEl.addEventListener("transitionrun", emitDrawerLayoutChange);
+          drawerEl.addEventListener("transitionend", emitDrawerLayoutChange);
+        }
+        if (!layoutObserver) {
+          layoutObserver = new MutationObserver(() => {
+            if (!overlay.hidden) schedulePosition();
+          });
+          layoutObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+          if (drawerEl) {
+            layoutObserver.observe(drawerEl, { attributes: true, attributeFilter: ["hidden", "aria-hidden", "class", "style"] });
+          }
+        }
       }
 
-      const railEl = document.querySelector(".rail");
-      const rect   = target.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
       const inView = rect.top >= 0 && rect.bottom <= window.innerHeight &&
-                     rect.left >= 0 && rect.right <= window.innerWidth;
+        rect.left >= 0 && rect.right <= window.innerWidth;
 
       // if target IS the rail container and it's scrolled down, reset scroll first
       if (target === railEl && railEl.scrollTop > 0) {
         railEl.scrollTo({ top: 0, behavior: "smooth" });
-        setTimeout(() => requestAnimationFrame(() => position(target)), 380);
+        watchScrollUntilSettled([railEl], 420);
       } else if (!inView) {
         // target is off-screen: scroll it into view then reposition
         target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-        let timer = null;
-        const onScroll = () => { clearTimeout(timer); timer = setTimeout(() => requestAnimationFrame(() => position(target)), 80); };
-        const els = [window, railEl].filter(Boolean);
-        els.forEach(el => el.addEventListener("scroll", onScroll, { passive: true }));
-        setTimeout(() => {
-          els.forEach(el => el.removeEventListener("scroll", onScroll));
-          requestAnimationFrame(() => position(target));
-        }, 500);
+        watchScrollUntilSettled([window, railEl], 560);
       } else {
         // already in view — defer one frame so callout reflow settles after innerHTML change
-        requestAnimationFrame(() => position(target));
+        schedulePosition();
       }
     }
 
-    function position(target) {
-      const PAD  = 8;
-      const rect = target.getBoundingClientRect();
-      const vw   = window.innerWidth;
-      const vh   = window.innerHeight;
+    function position() {
+      const rect = measureTargetRect();
+      if (!rect) return;
 
-      ring.style.left   = (rect.left - PAD) + "px";
-      ring.style.top    = (rect.top  - PAD) + "px";
-      ring.style.width  = (rect.width  + PAD * 2) + "px";
+      const PAD = 8;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const drawerRect = getDrawerRect();
+
+      ring.style.left = (rect.left - PAD) + "px";
+      ring.style.top = (rect.top - PAD) + "px";
+      ring.style.width = (rect.width + PAD * 2) + "px";
       ring.style.height = (rect.height + PAD * 2) + "px";
 
       const calloutW = 340;
       const calloutH = callout.getBoundingClientRect().height || 260;
-      const GAP      = 20;
+      const GAP = 20;
+      const minLeft = drawerRect ? Math.max(GAP, drawerRect.right + GAP) : GAP;
+      const maxLeft = Math.max(minLeft, vw - calloutW - GAP);
 
       let left;
       if (rect.right + calloutW + GAP * 2 <= vw) {
         left = rect.right + GAP;
-      } else if (rect.left - calloutW - GAP * 2 >= 0) {
+      } else if (rect.left - calloutW - GAP * 2 >= minLeft) {
         left = rect.left - calloutW - GAP;
       } else {
-        left = Math.max(GAP, Math.min(vw - calloutW - GAP, rect.left));
+        left = Math.max(minLeft, Math.min(maxLeft, rect.left));
       }
 
       let top = rect.top + rect.height / 2 - calloutH / 2;
       top = Math.max(GAP, Math.min(vh - calloutH - GAP, top));
 
       callout.style.left = left + "px";
-      callout.style.top  = top  + "px";
+      callout.style.top = top + "px";
     }
 
     function close() {
       overlay.hidden = true;
       overlay.setAttribute("aria-hidden", "true");
       current = -1;
-      window.removeEventListener("resize", onResize);
-      const rail = document.querySelector(".rail");
-      if (rail) rail.removeEventListener("scroll", onRailScroll);
-    }
-
-    function onResize() {
-      if (current < 0) return;
-      const target = document.querySelector(cards[current].dataset.spotlightTarget);
-      if (target) position(target);
-    }
-
-    function onRailScroll() {
+      activeTarget = null;
+      activeSelector = "";
+      clearTimeout(settleTimer);
+      if (settleCleanup) settleCleanup();
       if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        if (current < 0) return;
-        const target = document.querySelector(cards[current].dataset.spotlightTarget);
-        if (target) position(target);
-      });
+      rafId = null;
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("scroll", onViewportChange);
+      window.removeEventListener("drawer-layout-change", onViewportChange);
+      document.removeEventListener("pointerdown", onDocumentPointerDown, true);
+      if (viewport) {
+        viewport.removeEventListener("resize", onViewportChange);
+        viewport.removeEventListener("scroll", onViewportChange);
+      }
+      if (railEl) railEl.removeEventListener("scroll", onViewportChange);
+      if (drawerEl) {
+        drawerEl.removeEventListener("transitionrun", emitDrawerLayoutChange);
+        drawerEl.removeEventListener("transitionend", emitDrawerLayoutChange);
+      }
+      if (layoutObserver) {
+        layoutObserver.disconnect();
+        layoutObserver = null;
+      }
     }
   }
 
@@ -1277,7 +1506,7 @@
         source: "counties",
         filter: ["==", ["get", "f"], "__none__"],
         paint: {
-          "line-color": "#fc5855",
+          "line-color": coralColor(),
           "line-width": 1.4,
           "line-opacity": 1,
         },
@@ -1288,7 +1517,7 @@
         source: "counties",
         filter: ["==", ["get", "f"], "__none__"],
         paint: {
-          "line-color": "#fc5855",
+          "line-color": coralColor(),
           "line-width": 1.8,
           "line-opacity": 1,
         },
@@ -1298,7 +1527,7 @@
         type: "line",
         source: "counties",
         paint: {
-          "line-color": "#0a1319",
+          "line-color": edgeColor(),
           "line-width": 0.45,
           "line-opacity": 0.5,
         },
@@ -1324,6 +1553,7 @@
 
       syncGeoLayers();
       ensureLayerInteractions("counties-fill", "counties-outline-hover");
+      applyThemeToMap();
       hideMapLoading();
       waitForMapIdle(warmTractLayers, 900);
     });
@@ -1363,7 +1593,7 @@
       source: "tracts",
       filter: ["==", ["get", "f"], "__none__"],
       paint: {
-        "line-color": "#fc5855",
+        "line-color": coralColor(),
         "line-width": 1.2,
         "line-opacity": 1,
       },
@@ -1375,7 +1605,7 @@
       source: "tracts",
       filter: ["==", ["get", "f"], "__none__"],
       paint: {
-        "line-color": "#fc5855",
+        "line-color": coralColor(),
         "line-width": 1.5,
         "line-opacity": 1,
       },
@@ -1386,7 +1616,7 @@
       type: "line",
       source: "tracts",
       paint: {
-        "line-color": "#0a1319",
+        "line-color": edgeColor(),
         "line-width": 0.3,
         "line-opacity": [
           "interpolate", ["linear"], ["zoom"],
@@ -1477,12 +1707,11 @@
       document.getElementById("tipState").textContent = p.st || "–";
       document.getElementById("tipFips").textContent = p.f || "–";
       document.getElementById("tipCounty").textContent = p.cn || "–";
-      const chip = document.getElementById("tipChip");
-      if (chip) chip.style.background = "#1c2a34";
+      // tipChip background is handled by CSS (uses var(--s2))
 
       // Active row vs other row
       const active = STATE.activeModel;
-      const other  = active === "m1" ? "m2" : "m1";
+      const other = active === "m1" ? "m2" : "m1";
       const labels = { m1: "Diagnostic", m2: "Influenceable" };
 
       const aRow = document.getElementById("tipRowActive");
@@ -1491,15 +1720,15 @@
       aRow.classList.add(`is-${STATE.activeHorizon}`);
 
       document.getElementById("tipDotActive").className = "tip__dot tip__dot--" + active;
-      document.getElementById("tipDotOther").className  = "tip__dot tip__dot--" + other;
+      document.getElementById("tipDotOther").className = "tip__dot tip__dot--" + other;
       document.getElementById("tipLActive").textContent = labels[active];
-      document.getElementById("tipLOther").textContent  = labels[other];
+      document.getElementById("tipLOther").textContent = labels[other];
 
       const vals = { m1: { h3: m1_h3, h6: m1_h6 }, m2: { h3: m2_h3, h6: m2_h6 } };
       document.getElementById("tipActive_h3").textContent = fmt(vals[active].h3);
       document.getElementById("tipActive_h6").textContent = fmt(vals[active].h6);
-      document.getElementById("tipOther_h3").textContent  = fmt(vals[other].h3);
-      document.getElementById("tipOther_h6").textContent  = fmt(vals[other].h6);
+      document.getElementById("tipOther_h3").textContent = fmt(vals[other].h3);
+      document.getElementById("tipOther_h6").textContent = fmt(vals[other].h6);
 
       // Percentile is for active (model, horizon)
       const ranks = { m1: { h3: m1r_h3, h6: m1r_h6 }, m2: { h3: m2r_h3, h6: m2r_h6 } };
@@ -1513,12 +1742,12 @@
       const w = rect.width || 280, h = rect.height || 160;
       let tx = x + 16, ty = y + 16;
       const bottomEdge = viewportBottomEdge();
-      if (tx + w > innerWidth - 8)  tx = x - w - 16;
+      if (tx + w > innerWidth - 8) tx = x - w - 16;
       if (ty + h > bottomEdge) ty = y - h - 16;
       if (ty + h > bottomEdge) ty = bottomEdge - h;
       if (ty < 8) ty = 8;
       tip.style.left = tx + "px";
-      tip.style.top  = ty + "px";
+      tip.style.top = ty + "px";
       map.getCanvas().style.cursor = "crosshair";
     });
 
@@ -1544,11 +1773,11 @@
   async function ensureCountyStats() {
     if (STATE.countyStats || STATE.countyStatsLoading || STATE.countyStatsTried) return;
     STATE.countyStatsLoading = true;
-    const data = await fetchOptional("data/county_stats.json");
+    const data = await fetchOptional("data/county_stats.json?v=drivers-pp-1");
     STATE.countyStats = data;
     STATE.countyStatsLoading = false;
     STATE.countyStatsTried = true;
-    if (STATE.pinnedFeature && isCountyMode()) renderDrawer();
+    if (STATE.pinnedFeature && isCountyMode()) refreshScenarioDrawer();
   }
 
   async function fetchGzipJson(path) {
@@ -1596,20 +1825,20 @@
   }
 
   function renderFocusPanel() {
-    const focusEl  = document.getElementById("modeFocus");
-    const sumEl    = document.getElementById("modeSummary");
-    const scenEl   = document.getElementById("modeScenario");
+    const focusEl = document.getElementById("modeFocus");
+    const sumEl = document.getElementById("modeSummary");
+    const scenEl = document.getElementById("modeScenario");
     const anyShift = Object.values(STATE.sliderShifts).some(z => Math.abs(z) > 0.01);
 
     if (!STATE.focusedState) {
       if (focusEl) focusEl.hidden = true;
       // restore the appropriate non-focus mode
-      if (sumEl)  sumEl.hidden  = anyShift;
+      if (sumEl) sumEl.hidden = anyShift;
       if (scenEl) scenEl.hidden = !anyShift;
       return;
     }
     // Focused: hide both summary + scenario, show focus
-    if (sumEl)  sumEl.hidden  = true;
+    if (sumEl) sumEl.hidden = true;
     if (scenEl) scenEl.hidden = true;
     if (focusEl) focusEl.hidden = false;
 
@@ -1711,10 +1940,13 @@
     if (!dr) return;
     dr.hidden = false;
     document.body.classList.add("is-drawer-open");
+    window.dispatchEvent(new CustomEvent("drawer-layout-change"));
     // Force a frame to commit the hidden→visible state before transitioning.
     requestAnimationFrame(() => {
       dr.classList.add("is-open");
       dr.setAttribute("aria-hidden", "false");
+      window.dispatchEvent(new CustomEvent("drawer-layout-change"));
+      requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("drawer-layout-change")));
     });
   }
 
@@ -1724,12 +1956,17 @@
     dr.classList.remove("is-open");
     dr.setAttribute("aria-hidden", "true");
     document.body.classList.remove("is-drawer-open");
+    window.dispatchEvent(new CustomEvent("drawer-layout-change"));
     // After transition, hide for a11y. Reduced-motion: hide immediately.
     if (REDUCED) {
       dr.hidden = true;
+      window.dispatchEvent(new CustomEvent("drawer-layout-change"));
     } else {
       setTimeout(() => {
-        if (!dr.classList.contains("is-open")) dr.hidden = true;
+        if (!dr.classList.contains("is-open")) {
+          dr.hidden = true;
+          window.dispatchEvent(new CustomEvent("drawer-layout-change"));
+        }
       }, 360);
     }
   }
@@ -1772,6 +2009,19 @@
       const e = Math.exp(z);
       return e / (1 + e);
     }
+  }
+  function shapToPp(risk, shapValue) {
+    if (risk == null || risk === "null") return null;
+    const p = Number(risk);
+    const v = Number(shapValue);
+    if (isNaN(p) || isNaN(v)) return null;
+    return (p - sigmoid(logit(p) - v)) * 100;
+  }
+  function fmtPp(v) {
+    const n = Number(v);
+    if (n == null || isNaN(n)) return "–";
+    const sign = n >= 0 ? "+" : "";
+    return `${sign}${n.toFixed(1)} pp`;
   }
 
   // List of {label, z} for the plain-language scenario note in the drawer.
@@ -1884,7 +2134,58 @@
     return shifts;
   }
 
-  // Apply linearized scenario adjustment to the pinned tract's risks and SHAP.
+  function driverFeature(row) {
+    return Array.isArray(row) ? row[0] : (row && (row.feature || row.f));
+  }
+
+  function driverValue(row) {
+    if (Array.isArray(row)) return Number(row[1]) || 0;
+    return Number(row && (row.value ?? row.shap ?? row.v)) || 0;
+  }
+
+  function countyDetailForPinned() {
+    const p = STATE.pinnedFeature;
+    if (!isCountyMode() || !p || !STATE.countyStats) return null;
+    return STATE.countyStats[p.f || p.cf] || null;
+  }
+
+  function baseDriverListForKey(key) {
+    const p = STATE.pinnedFeature;
+    if (!p) return null;
+    if (isCountyMode()) {
+      const countyDetail = countyDetailForPinned();
+      return countyDetail && countyDetail.drivers ? countyDetail.drivers[key] : null;
+    }
+    const entry = STATE.shap && p.f ? STATE.shap[p.f] : null;
+    return entry && entry[key] ? entry[key] : null;
+  }
+
+  function adjustedDriverLists(dShapByFeat) {
+    const out = {};
+    ["m1_h3", "m1_h6", "m2_h3", "m2_h6"].forEach(key => {
+      const base = baseDriverListForKey(key);
+      if (!base) { out[key] = null; return; }
+      const isM2 = key.startsWith("m2_");
+      const adj = new Map();
+      base.forEach(row => {
+        const feat = driverFeature(row);
+        if (!feat) return;
+        adj.set(feat, driverValue(row));
+      });
+      Object.entries(dShapByFeat).forEach(([leverKey, dS]) => {
+        const localD = isM2 ? dS : (dS * 0.4);
+        const cur = adj.get(leverKey) || 0;
+        adj.set(leverKey, cur + localD);
+      });
+      out[key] = [...adj.entries()]
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+        .slice(0, 8)
+        .map(([f, v]) => [f, v]);
+    });
+    return out;
+  }
+
+  // Apply linearized scenario adjustment to the pinned geography's risks and SHAP.
   // Populates STATE.scenarioAdjustedRisks / scenarioAdjustedShap, or clears
   // them when the scenario is at baseline. Caller should renderDrawer() after.
   function applyScenarioToDrawer() {
@@ -1922,11 +2223,6 @@
     STATE.scenarioAdjustedRisks = adjRisks;
     STATE.scenarioActiveLevers = activeLeversForNote();
 
-    if (isCountyMode()) {
-      STATE.scenarioAdjustedShap = null;
-      return;
-    }
-
     // 2) Adjusted SHAP top-N for the active (model × horizon).
     // We apply per-feature shifts to the existing top-8 list, then re-rank.
     // Features that aren't currently in the top-8 might come into the top-5
@@ -1934,36 +2230,7 @@
     // (it's not in shap_top.json). For completeness we synthesize an entry
     // for any lever feature whose adjusted magnitude exceeds the 5th-place
     // threshold; we treat its base as 0 and use Δshap as the new value.
-    if (STATE.shap) {
-      const fips = p.f;
-      const entry = STATE.shap[fips];
-      const adjShap = {};
-      ["m1_h3", "m1_h6", "m2_h3", "m2_h6"].forEach(key => {
-        const base = entry && entry[key] ? entry[key] : null;
-        if (!base) { adjShap[key] = null; return; }
-        const isM2 = key.startsWith("m2_");
-        // Build a map of feature → adjusted SHAP value.
-        const adj = new Map();
-        base.forEach(([feat, val]) => {
-          adj.set(feat, Number(val) || 0);
-        });
-        Object.entries(dShapByFeat).forEach(([leverKey, dS]) => {
-          // Apply with same model dampening as the risk calc.
-          const localD = isM2 ? dS : (dS * 0.4);
-          const cur = adj.get(leverKey) || 0;
-          adj.set(leverKey, cur + localD);
-        });
-        // Sort by absolute value, take top-8.
-        const sorted = [...adj.entries()]
-          .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-          .slice(0, 8)
-          .map(([f, v]) => [f, v]);
-        adjShap[key] = sorted;
-      });
-      STATE.scenarioAdjustedShap = adjShap;
-    } else {
-      STATE.scenarioAdjustedShap = null;
-    }
+    STATE.scenarioAdjustedShap = adjustedDriverLists(dShapByFeat);
 
   }
 
@@ -2025,7 +2292,7 @@
       { m: "m2", h: "h6", v: m2_h6, r: m2r_h6 },
     ];
     const MODEL_NAME = { m1: "Diagnostic", m2: "Influenceable" };
-    const YEAR_OF    = { h3: "2027 forecast", h6: "2030 scenario" };
+    const YEAR_OF = { h3: "2027 forecast", h6: "2030 scenario" };
     cells.forEach(c => {
       const isActive = c.m === STATE.activeModel && c.h === STATE.activeHorizon;
       const div = document.createElement("div");
@@ -2038,9 +2305,9 @@
         const above = Math.round(c.r);          // % of state's tracts THIS tract beats
         const below = 100 - above;               // % above this tract
         if (above >= 50) {
-          rankTxt = `Higher risk than ${above}% of ${stAbbr || "state"} ${activeGeoMeta().plural}`;
+          rankTxt = `Top ${Math.max(1, below)}% in ${stAbbr || "state"}`;
         } else {
-          rankTxt = `Lower risk than ${below}% of ${stAbbr || "state"} ${activeGeoMeta().plural}`;
+          rankTxt = `Bottom ${Math.max(1, above)}% in ${stAbbr || "state"}`;
         }
       }
       const barW = (c.r == null) ? 0 : Math.max(1, Math.min(100, c.r));
@@ -2048,7 +2315,7 @@
       div.innerHTML = `
         <div class="drawcell__head">${MODEL_NAME[c.m]} · ${YEAR_OF[c.h]}</div>
         <div class="drawcell__v">${valTxt}</div>
-        <div class="drawcell__sub">chance of becoming a credit desert</div>
+        <div class="drawcell__sub">predicted risk</div>
         <div class="drawcell__pct">${rankTxt}</div>
         <div class="drawcell__bar"><div class="drawcell__bar-fill" style="width: ${barW}%;"></div></div>
       `;
@@ -2101,33 +2368,33 @@
   function divergenceCopy(m1, m2) {
     if (m1 >= 0.05 && m2 < 0.02) {
       return {
-        headline: "The two lenses disagree, and the structural lens flags higher risk",
-        body: "The Diagnostic lens reads this neighborhood as risky because of structural conditions, poverty, demographics, weak labor market. But the Influenceable lens, which only looks at the lending environment, sees a relatively healthy local market. Practical reading: this place has structural disadvantage, but credit access here is better than the demographic profile would predict.",
+        headline: "Status-quo risk is higher than lending-environment risk",
+        body: "Diagnostic flags the area's social and economic environment. Influenceable sees less lending-access fragility, so the available levers may not fully reach the risk.",
       };
     }
     if (m1 < 0.02 && m2 >= 0.05) {
       return {
-        headline: "The two lenses disagree, and the lending-environment lens flags higher risk",
-        body: "The Diagnostic lens reads this neighborhood as low-risk because the demographic profile looks ordinary. But the Influenceable lens sees a fragile lending environment: thin local lender depth, sparse mission-lender presence, or weakening branch access. Practical reading: this place's credit access could deteriorate faster than the demographics would suggest, which is exactly the kind of signal the Influenceable model is designed to surface.",
+        headline: "Lending-environment risk is higher than status-quo risk",
+        body: "Diagnostic reads the broader context as lower risk. Influenceable sees weak branch access, mission-lender reach, lender depth, or related credit-access signals.",
       };
     }
     if (m1 >= 0.05 && m2 >= 0.05) {
       const higher = m2 > m1 ? "Influenceable" : "Diagnostic";
       return {
         headline: "Both lenses see elevated risk; they differ on how much",
-        body: "Both lenses flag this neighborhood as elevated risk. The " + higher + " lens reads it higher because the lending-environment signals here are weaker than what the demographic profile alone would predict. Local action on lending access could matter here.",
+        body: "Both lenses flag this place. The " + higher + " lens reads it higher, so compare the local drivers before treating the risk as one kind of problem.",
       };
     }
     if (m1 < 0.02 && m2 < 0.02) {
       return {
         headline: "Both lenses see this as low-risk overall",
-        body: "Both lenses see this as low-risk overall. The small disagreement is not load-bearing; either model is fine for this neighborhood.",
+        body: "The disagreement is small. This place is not where either lens sees the strongest pressure.",
       };
     }
     const higher = m2 > m1 ? "Influenceable" : "Diagnostic";
     return {
       headline: "The two lenses disagree on this neighborhood",
-      body: "The " + higher + " lens reads this neighborhood as higher risk than the other lens does. The disagreement comes from one model seeing a signal the other does not, either structural disadvantage or lending-environment fragility. Read both numbers together rather than relying on one.",
+      body: "The " + higher + " lens reads this place as higher risk. Use the gap to separate status-quo pressure from lending-environment pressure.",
     };
   }
 
@@ -2182,24 +2449,33 @@
     const hzLbl = document.getElementById("drawerShapHz");
     if (!wrap) return;
     const shapSection = wrap.closest(".drawer__sect");
-    if (shapSection) shapSection.hidden = isCountyMode();
-    if (isCountyMode()) return;
+    if (shapSection) shapSection.hidden = false;
     const m = STATE.activeModel;
     const h = STATE.activeHorizon;
     const MODEL_NAME = { m1: "Diagnostic", m2: "Influenceable" };
-    const YEAR_OF    = { h3: "2027 forecast", h6: "2030 scenario" };
+    const YEAR_OF = { h3: "2027 forecast", h6: "2030 scenario" };
     hzLbl.textContent = `${MODEL_NAME[m]} · ${YEAR_OF[h]}`;
 
     wrap.innerHTML = "";
 
-    if (STATE.shapLoading) {
+    const countyMode = isCountyMode();
+    if ((countyMode && STATE.countyStatsLoading) || (!countyMode && STATE.shapLoading)) {
       const li = document.createElement("li");
       li.className = "drawshap__empty";
       li.textContent = "Loading drivers…";
       wrap.appendChild(li);
       return;
     }
-    if (!STATE.shap) {
+    if (countyMode && !STATE.countyStats) {
+      const li = document.createElement("li");
+      li.className = "drawshap__empty";
+      li.textContent = STATE.countyStatsTried
+        ? "Drivers not yet computed for this build."
+        : "Drivers not yet loaded.";
+      wrap.appendChild(li);
+      return;
+    }
+    if (!countyMode && !STATE.shap) {
       const li = document.createElement("li");
       li.className = "drawshap__empty";
       li.textContent = STATE.shapTried
@@ -2209,15 +2485,20 @@
       return;
     }
 
-    const fips = STATE.pinnedFeature && STATE.pinnedFeature.f;
-    const entry = fips ? STATE.shap[fips] : null;
     const key = `${m}_${h}`;
-    const list = entry && entry[key] ? entry[key] : null;
+    const p = STATE.pinnedFeature || {};
+    const num = (v) => (v == null || v === "null") ? null : Number(v);
+    const adj = STATE.scenarioAdjustedRisks;
+    const risk = adj && adj[key] != null ? adj[key] : num(p[key]);
+    const list = (STATE.scenarioAdjustedShap && STATE.scenarioAdjustedShap[key])
+      || baseDriverListForKey(key);
 
     if (!list || !list.length) {
       const li = document.createElement("li");
       li.className = "drawshap__empty";
-      li.textContent = "Drivers not available for this tract.";
+      li.textContent = countyMode
+        ? "Drivers not available for this county."
+        : "Drivers not available for this tract.";
       wrap.appendChild(li);
       return;
     }
@@ -2225,42 +2506,46 @@
     // Cache stores top-8; we display top-5 with a render-time exclusion list
     // for any features deemed misleading for the policy audience.
     const RENDER_EXCLUDE = new Set(["has_hmda"]);
-    const filtered = list.filter(([f, _]) => !RENDER_EXCLUDE.has(f));
-    const top5 = filtered.slice(0, 5);
-    const maxAbs = Math.max(...top5.map(([, v]) => Math.abs(Number(v) || 0))) || 1e-6;
+    const rows = list
+      .map(row => {
+        const feat = driverFeature(row);
+        const rawValue = driverValue(row);
+        const storedPp = !Array.isArray(row) && row && row.pp != null ? Number(row.pp) : null;
+        const pp = (STATE.scenarioAdjustedShap && STATE.scenarioAdjustedShap[key])
+          ? shapToPp(risk, rawValue)
+          : (storedPp != null && !isNaN(storedPp) ? storedPp : shapToPp(risk, rawValue));
+        return { feat, value: rawValue, pp };
+      })
+      .filter(row => row.feat && !RENDER_EXCLUDE.has(row.feat) && row.pp != null && !isNaN(row.pp))
+      .sort((a, b) => Math.abs(b.pp) - Math.abs(a.pp));
+    const top5 = rows.slice(0, 5);
+    if (!top5.length) {
+      const li = document.createElement("li");
+      li.className = "drawshap__empty";
+      li.textContent = countyMode
+        ? "Drivers not available for this county."
+        : "Drivers not available for this tract.";
+      wrap.appendChild(li);
+      return;
+    }
+    const maxAbs = Math.max(...top5.map(row => Math.abs(row.pp))) || 1e-6;
 
-    // Translate raw SHAP magnitude into plain-English tiers.
-    // SHAP values here are log-odds; the strongest in our data top out around
-    // 2.0. We bucket relative to maxAbs so the label scales with what's
-    // currently visible, not an absolute scale the user has to interpret.
-    const tierLabel = (absV) => {
-      const r = absV / maxAbs;
-      if (r >= 0.75) return "Strongly";
-      if (r >= 0.40) return "Moderately";
-      if (r >= 0.15) return "Slightly";
-      return "Marginally";
-    };
-
-    top5.forEach(([feat, val]) => {
-      const v = Number(val) || 0;
-      const isPos = v >= 0;
-      const widthPct = Math.max(4, (Math.abs(v) / maxAbs) * 100);
+    top5.forEach(({ feat, pp }) => {
+      const isPos = pp >= 0;
+      const widthPct = Math.max(4, (Math.abs(pp) / maxAbs) * 100);
       const li = document.createElement("li");
       li.className = "drawshap";
       li.dataset.feat = feat;  // for tooltip binding
       li.tabIndex = 0;          // keyboard-focusable
       const pretty = FEATURE_LABEL[feat] || feat.replace(/_/g, " ");
-      const tier = tierLabel(Math.abs(v));
-      const direction = isPos ? "raises" : "lowers";
       const arrow = isPos ? "▲" : "▼";
-      const phrase = `${tier} ${direction} risk`;
       li.innerHTML = `
         <span class="drawshap__nm">
           <span class="drawshap__arrow ${isPos ? "pos" : "neg"}" aria-hidden="true">${arrow}</span>
           ${pretty}
         </span>
         <span class="drawshap__bar"><span class="drawshap__bar-fill ${isPos ? "pos" : "neg"}" style="width:${widthPct}%;"></span></span>
-        <span class="drawshap__v ${isPos ? "pos" : "neg"}">${phrase}</span>
+        <span class="drawshap__v ${isPos ? "pos" : "neg"}">${fmtPp(pp)}</span>
       `;
       // Tooltip handlers — show feature description on hover/focus
       li.addEventListener("mouseenter", (e) => showFeatureTip(feat, li));
@@ -2464,6 +2749,17 @@
       });
     });
 
+    // Methodology model switcher — scoped to cards 02 + 02b only
+    document.querySelectorAll("[data-meth-model]").forEach(b => {
+      b.addEventListener("click", () => {
+        const model = b.dataset.methModel;
+        if (!model || model === STATE.methModel) return;
+        STATE.methModel = model;
+        syncMethodologyModelButtons();
+        renderMethodology();
+      });
+    });
+
     // Geography
     document.querySelectorAll(".geo").forEach(b => {
       b.addEventListener("click", () => requestGeoMode(b.dataset.geo));
@@ -2475,6 +2771,29 @@
       x.classList.toggle("is-active", x.dataset.geo === g);
       x.setAttribute("aria-pressed", x.dataset.geo === g ? "true" : "false");
     });
+  }
+
+  function getMethodologyModelLabel(model = STATE.methModel) {
+    return model === "influenceable" ? "Influenceable" : "Diagnostic";
+  }
+
+  function getMethodologyHorizonLabel(horizon = STATE.methHorizon) {
+    return horizon === "h3" ? "2027 forecast" : "2030 scenario";
+  }
+
+  function syncMethodologyModelButtons() {
+    document.querySelectorAll("[data-meth-model]").forEach(x => {
+      const on = x.dataset.methModel === STATE.methModel;
+      x.classList.toggle("is-active", on);
+      x.setAttribute("aria-pressed", String(on));
+    });
+  }
+
+  function getMethodologyModelPayload(bucket, model = STATE.methModel) {
+    if (!bucket) return null;
+    if (bucket[model]) return bucket[model];
+    if (model === "influenceable" && (bucket.levers || bucket.ranking)) return bucket;
+    return null;
   }
 
   function requestGeoMode(g) {
@@ -2564,11 +2883,10 @@
   function syncHorizonAffordances() {
     document.getElementById("horizonLabel").textContent =
       "Forecasting → " + HZ_YEAR[STATE.activeHorizon];
-    document.getElementById("metaHorizon").textContent  = HZ_META[STATE.activeHorizon];
+    document.getElementById("metaHorizon").textContent = HZ_META[STATE.activeHorizon];
     document.getElementById("legendHorizon").textContent = HZ_YEAR[STATE.activeHorizon] + " forecast";
     document.getElementById("railHorizon").textContent =
       STATE.activeHorizon === "h3" ? "2027 forecast" : "2030 scenario";
-    document.getElementById("railHorizonDesc").textContent = HZ_DESC[STATE.activeHorizon];
   }
 
   // ---------------------------------------------------------------------
@@ -2586,17 +2904,17 @@
       m === "m1" ? "Diagnostic" : "Influenceable";
     document.getElementById("railModelDesc").textContent =
       m === "m1"
-        ? "All 39 features. Round-5 champion. The strongest predictor of future credit deserts, but it leans on supply-side signal we can't move."
-        : "Twenty influenceable features, residualized against demographics. A quieter forecast, but every signal in it is something policy could fund or build.";
+        ? "Status-quo lens: demographics and environmental conditions show whether local context is driving credit risk."
+        : "Lending-environment lens: movable credit-access variables show where risk is tied to things people can change.";
 
     if (!head) {
       document.getElementById("bigAuc").textContent = "–";
-      document.getElementById("bigAp").textContent  = "–";
+      document.getElementById("bigAp").textContent = "–";
       document.getElementById("bigSpread").textContent = "–";
       return;
     }
     tweenNumber(document.getElementById("bigAuc"), head.mean_auc, 3, 1.0);
-    tweenNumber(document.getElementById("bigAp"),  head.mean_ap,  3, 1.0);
+    tweenNumber(document.getElementById("bigAp"), head.mean_ap, 3, 1.0);
     document.getElementById("bigSpread").textContent =
       "± " + (head.std_auc != null ? head.std_auc.toFixed(3) : "–");
   }
@@ -2632,7 +2950,7 @@
     const m = STATE.activeModel;
     const h = STATE.activeHorizon;
     const meanK = geoMeanKey(m, h);
-    const aucK  = `auc_${m}_${h}`;
+    const aucK = `auc_${m}_${h}`;
 
     const states = STATE.states.states.filter(s => s[meanK] != null);
 
@@ -2643,9 +2961,9 @@
       const li = document.createElement("li");
       li.className = "topstate";
       li.innerHTML = `
-        <span class="topstate__rk">${String(i+1).padStart(2,"0")}</span>
+        <span class="topstate__rk">${String(i + 1).padStart(2, "0")}</span>
         <span class="topstate__nm">${s.state}</span>
-        <span class="topstate__v">${(s[meanK]*100).toFixed(2)}%</span>
+        <span class="topstate__v">${(s[meanK] * 100).toFixed(2)}%</span>
       `;
       li.addEventListener("click", () => flyToState(s.state));
       tEl.appendChild(li);
@@ -2659,7 +2977,7 @@
       const li = document.createElement("li");
       li.className = "topstate";
       li.innerHTML = `
-        <span class="topstate__rk">${String(i+1).padStart(2,"0")}</span>
+        <span class="topstate__rk">${String(i + 1).padStart(2, "0")}</span>
         <span class="topstate__nm">${s.state}</span>
         <span class="topstate__v">AUC ${s[aucK].toFixed(3)}</span>
       `;
@@ -2685,7 +3003,7 @@
       const bar = document.createElement("div");
       bar.className = "histo__bar";
       const lo = hist.edges[i], hi = hist.edges[i + 1];
-      bar.dataset.c = `${(lo*100).toFixed(0)}–${(hi*100).toFixed(0)}%: ${c.toLocaleString()}`;
+      bar.dataset.c = `${(lo * 100).toFixed(0)}–${(hi * 100).toFixed(0)}%: ${c.toLocaleString()}`;
       bar.style.height = `${Math.max(2, (c / max) * 100)}%`;
       wrap.appendChild(bar);
     });
@@ -2737,7 +3055,7 @@
       wrap.appendChild(div);
 
       const rng = div.querySelector("input");
-      rng.addEventListener("input",  (e) => onSliderInput(lev, parseFloat(e.target.value)));
+      rng.addEventListener("input", (e) => onSliderInput(lev, parseFloat(e.target.value)));
       rng.addEventListener("change", (e) => onSliderInput(lev, parseFloat(e.target.value)));
 
       // Lever tooltip — only for sliders we have locked plain-language copy for.
@@ -2746,8 +3064,8 @@
       if (LEVER_TOOLTIP_CONTENT[lev.key]) {
         div.addEventListener("mouseenter", () => showLeverTip(lev.key, div));
         div.addEventListener("mouseleave", () => hideLeverTip());
-        div.addEventListener("focusin",   () => showLeverTip(lev.key, div));
-        div.addEventListener("focusout",  () => hideLeverTip());
+        div.addEventListener("focusin", () => showLeverTip(lev.key, div));
+        div.addEventListener("focusout", () => hideLeverTip());
       }
 
       // Restore "shifted" display if user already moved this lever
@@ -2769,16 +3087,16 @@
       const fmt = lev.unit === "share active"
         ? shifted.toFixed(2)
         : Math.abs(shifted) >= 100 ? shifted.toFixed(0)
-        : Math.abs(shifted) >= 10  ? shifted.toFixed(1)
-        : shifted.toFixed(2);
+          : Math.abs(shifted) >= 10 ? shifted.toFixed(1)
+            : shifted.toFixed(2);
       // Plain-language descriptor for how far above/below the national average
       // we are, based on z-score magnitude. Drop greek letters entirely.
       const unitWord = lev.unit === "mi" ? "miles"
-                     : lev.unit === "branches" ? "branches"
-                     : lev.unit === "MDI within 25 mi" ? "MDIs within 25 mi"
-                     : lev.unit === "intermediaries" ? "microlenders"
-                     : lev.unit === "share active" ? "share active"
-                     : lev.unit;
+        : lev.unit === "branches" ? "branches"
+          : lev.unit === "MDI within 25 mi" ? "MDIs within 25 mi"
+            : lev.unit === "intermediaries" ? "microlenders"
+              : lev.unit === "share active" ? "share active"
+                : lev.unit;
       const az = Math.abs(z);
       const direction = z > 0 ? "above" : "below";
       let descriptor;
@@ -2816,7 +3134,7 @@
   }
 
   function computeColorExpr() {
-    const ramp = RAMPS[STATE.activeModel];
+    const ramp = ramps()[STATE.activeModel];
     const m = riskProp();
     const effect = scenarioLogitEffect(STATE.activeModel);
     if (Math.abs(effect) < 0.0005) {
@@ -2825,7 +3143,7 @@
     const stops = ramp.flatMap(([t, c]) => [t, c]);
     return [
       "case",
-      ["==", ["get", m], null], "#0c1318",
+      ["==", ["get", m], null], nullFillColor(),
       ["interpolate", ["linear"],
         scenarioRiskExpr(m, effect),
         ...stops
@@ -2850,11 +3168,11 @@
 
     const cntUp = document.getElementById("cntUp");
     const cntDn = document.getElementById("cntDn");
-    const net   = document.getElementById("netDelta");
+    const net = document.getElementById("netDelta");
 
-    cntUp.textContent = (delta > 0 ? "+" : "") + Math.round(Math.max(0,  delta)).toLocaleString();
+    cntUp.textContent = (delta > 0 ? "+" : "") + Math.round(Math.max(0, delta)).toLocaleString();
     cntDn.textContent = (delta < 0 ? "−" : "") + Math.round(Math.max(0, -delta)).toLocaleString();
-    net.textContent = `net ${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta)).toLocaleString()} ${activeGeoMeta().plural} · estimated national shift ${(shift*100 >= 0?"+":"")}${(shift*100).toFixed(2)} percentage points`;
+    net.textContent = `net ${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta)).toLocaleString()} ${activeGeoMeta().plural} · estimated national shift ${(shift * 100 >= 0 ? "+" : "")}${(shift * 100).toFixed(2)} percentage points`;
   }
 
   function baselineMeanRisk(model, horizon) {
@@ -2935,6 +3253,10 @@
     if (!STATE.states) return;
     const head = STATE.states.headline || {};
     const h = STATE.methHorizon;
+    const model = STATE.methModel;
+    const modelLabel = getMethodologyModelLabel(model);
+    const horizonLabel = getMethodologyHorizonLabel(h);
+    syncMethodologyModelButtons();
 
     // Section 0 — horizon comparison KV
     const t_h3auc = document.getElementById("t_h3auc");
@@ -2951,16 +3273,18 @@
     setText("t_hzlabel", h === "h3" ? "2027 forecast" : "2030 scenario");
     setText("t_m1auc", m1k && m1k.mean_auc != null ? m1k.mean_auc.toFixed(3) : "–");
     setText("t_m2auc", m2k && m2k.mean_auc != null ? m2k.mean_auc.toFixed(3) : "–");
-    setText("t_m1ap",  m1k && m1k.mean_ap  != null ? m1k.mean_ap.toFixed(3)  : "–");
-    setText("t_m2ap",  m2k && m2k.mean_ap  != null ? m2k.mean_ap.toFixed(3)  : "–");
+    setText("t_m1ap", m1k && m1k.mean_ap != null ? m1k.mean_ap.toFixed(3) : "–");
+    setText("t_m2ap", m2k && m2k.mean_ap != null ? m2k.mean_ap.toFixed(3) : "–");
     setText("t_m1folds", m1k && m1k.n_folds != null ? String(m1k.n_folds) : "–");
     setText("t_m2folds", m2k && m2k.n_folds != null ? String(m2k.n_folds) : "–");
 
     // Sections 2 + 3 horizon labels
-    setText("ablHzLabel", h === "h3" ? "2027 forecast" : "2030 scenario");
-    setText("regHzLabel", h === "h3" ? "2027 forecast" : "2030 scenario");
+    setText("ablHzLabel", horizonLabel);
+    setText("ablModelLabel", modelLabel);
+    setText("regHzLabel", horizonLabel);
 
-    setText("topFeatHzLabel", h === "h3" ? "2027 forecast" : "2030 scenario");
+    setText("topFeatHzLabel", horizonLabel);
+    setText("topFeatModelLabel", modelLabel);
 
     renderAblation();
     renderTopFeats();
@@ -2971,9 +3295,13 @@
     const wrap = document.getElementById("topFeats");
     if (!wrap) return;
     wrap.innerHTML = "";
-    const pr = STATE.pruning && STATE.pruning[STATE.methHorizon];
+    wrap.dataset.model = STATE.methModel;
+    const modelLabel = getMethodologyModelLabel();
+    const horizonLabel = getMethodologyHorizonLabel();
+    wrap.setAttribute("aria-label", `${modelLabel} top features at ${horizonLabel}`);
+    const pr = getMethodologyModelPayload(STATE.pruning && STATE.pruning[STATE.methHorizon]);
     if (!pr || !pr.ranking) {
-      wrap.innerHTML = `<li class="topfeat" style="grid-template-columns:1fr"><span class="toptract__nm">Top-features data pending.</span></li>`;
+      wrap.innerHTML = `<li class="topfeat" style="grid-template-columns:1fr"><span class="topfeat__nm">${modelLabel} top-features data unavailable for ${horizonLabel}.</span></li>`;
       return;
     }
     const top8 = pr.ranking.slice(0, 8);
@@ -2998,13 +3326,17 @@
     const wrap = document.getElementById("ablChart");
     if (!wrap) return;
     wrap.innerHTML = "";
+    wrap.dataset.model = STATE.methModel;
+    const modelLabel = getMethodologyModelLabel();
+    const horizonLabel = getMethodologyHorizonLabel();
+    wrap.setAttribute("aria-label", `${modelLabel} category-dependence impact by feature group at ${horizonLabel}`);
 
-    const abl = STATE.abl[STATE.methHorizon];
+    const abl = getMethodologyModelPayload(STATE.abl[STATE.methHorizon]);
     if (!abl || !abl.levers) {
       wrap.innerHTML = `
         <div class="ablempty">
-          <div class="kicker">Category-dependence check pending</div>
-          <p>The ${STATE.activeHorizon === "h3" ? "2027 forecast" : "2030 scenario"} category-dependence table is being regenerated. Reload after <span class="mono">build_dashboard_data.py</span> picks up the new scenario-weight output.</p>
+          <div class="kicker">${modelLabel} data unavailable</div>
+          <p>No category-dependence output is available for the ${horizonLabel} ${modelLabel.toLowerCase()} model yet. Rebuild the methodology JSONs after the upstream diagnostics finish.</p>
         </div>
       `;
       return;
@@ -3048,6 +3380,17 @@
     microloan_intermediary_within_25mi: "Microlender ecosystem",
     avg_loan_size_resid: "Average loan size",
     n_lenders_tract_resid: "Lender count",
+    ruca_code: "RUCA code",
+    housing_units: "Housing units",
+    is_persistent_poverty: "Persistent poverty",
+    population: "Population",
+    median_hh_income: "Median household income",
+    pct_black: "% Black",
+    pct_minority: "% minority",
+    is_rural: "Rural flag",
+    fdic_deposit_hhi: "FDIC deposit concentration",
+    fdic_deposit_hhi_chg3yr: "FDIC concentration change (3y)",
+    fdic_top_bank_share_chg3yr: "Top-bank share change (3y)",
     pct_minority_resid: "% minority",
     median_household_income: "Median household income",
   };
@@ -3062,10 +3405,10 @@
       return;
     }
 
-    const pre  = (reg.rows || []).find(r => r.regime === "precovid");
+    const pre = (reg.rows || []).find(r => r.regime === "precovid");
     const post = (reg.rows || []).find(r => r.regime === "postcovid");
     const rows = [
-      { ...pre,  label: "Pre-COVID",  top: reg.precovid_top,  key: "precovid"  },
+      { ...pre, label: "Pre-COVID", top: reg.precovid_top, key: "precovid" },
       { ...post, label: "Post-COVID", top: reg.postcovid_top, key: "postcovid" },
     ];
 
@@ -3095,8 +3438,8 @@
           <ol>
             ${top5.map(t => `
               <li>
-                <span>${String(t.rank).padStart(2,"0")}</span>
-                <b>${FEAT_LBL[t.feature] || t.feature.replace(/_/g," ")}</b>
+                <span>${String(t.rank).padStart(2, "0")}</span>
+                <b>${FEAT_LBL[t.feature] || t.feature.replace(/_/g, " ")}</b>
                 <span>${t.importance.toFixed(3)}</span>
               </li>`).join("")}
           </ol>

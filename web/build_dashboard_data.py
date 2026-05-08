@@ -8,6 +8,8 @@ Two models × two horizons (h+3 = 2027, h+6 = 2030):
 Inputs (all on disk; ROUND5 is bundled into the repo as round5-diagnostic/):
     ../round5-diagnostic/diagnostics/walk_forward_h3/test_predictions.parquet
     ../round5-diagnostic/diagnostics/walk_forward_h6/test_predictions.parquet
+    ../round5-diagnostic/diagnostics/feature_importance/ranked.csv
+    ../round5-diagnostic/diagnostics/family_ablation_h{3,6}/ablation_summary.csv
     ../diagnostics/round7_phaseA_h3/test_predictions.parquet
     ../diagnostics/round7_phaseA_h6/test_predictions.parquet
     ../diagnostics/round7_ablation_h{3,6}/ablation_summary.csv
@@ -21,14 +23,15 @@ Outputs (web/data/):
     county_stats.json               per-county drawer payload (top tracts + metadata)
     state_stats.json                per-state tract/county summaries + national histograms
     state_bbox.json                 per-state bbox for fly-to
-    ablation_h3.json, ablation_h6.json
-    pruning_h3.json, pruning_h6.json
+    ablation_h3.json, ablation_h6.json    model-keyed: diagnostic + influenceable
+    pruning_h3.json, pruning_h6.json      model-keyed: diagnostic + influenceable
     regime_h3.json, regime_h6.json
     feature_stats.json              for the Scenario explorer slider
 """
 from __future__ import annotations
 import json
 import math
+import gzip
 from pathlib import Path
 
 import numpy as np
@@ -58,6 +61,8 @@ PREDS = {
 SRC_GEO = ROUND5 / "web" / "data" / "tracts.geojson"
 COUNTY_GEO = ROUND5 / "web" / "data" / "counties.geojson"
 COUNTY_LOOKUP = ROUND5 / "web" / "data" / "_lookup" / "county_names.txt"
+SHAP_JSON = DATA / "shap_top.json"
+SHAP_JSON_GZ = DATA / "shap_top.json.gz"
 
 # Search index inputs (downloaded ahead of build by the harness; if missing,
 # the city index falls back to a hardcoded list of major US cities).
@@ -89,6 +94,18 @@ LEVER_LABEL = {
     "ssbci_state_policy": "SSBCI state policy",
 }
 
+DIAGNOSTIC_FAMILY_LABEL = {
+    "place_rural": "Rurality / place type",
+    "place_persistent_pov": "Persistent poverty",
+    "regime_flag": "HMDA availability regime",
+    "cra_county_concentration": "CRA county concentration",
+    "fdic_concentration": "FDIC concentration",
+    "fdic_other": "FDIC branch / deposit structure",
+    "hmda": "HMDA lending flow",
+    "acs_demographics": "ACS demographics",
+    "other": "Other",
+}
+
 STATE_ABBR = {
     "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE",
     "11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA",
@@ -100,6 +117,70 @@ STATE_ABBR = {
 }
 
 TERRITORIES = {"72", "78", "60", "66", "69"}
+
+
+def build_ablation_payload(df: pd.DataFrame, label_map: dict[str, str]) -> dict | None:
+    if df.empty:
+        return None
+    base_rows = df[df["lever_dropped"] == "none_baseline"]
+    if base_rows.empty:
+        return None
+    base = base_rows.iloc[0]
+    levers = df[df["lever_dropped"] != "none_baseline"].sort_values("delta_ap_vs_full")
+
+    def lever_label(row: pd.Series) -> str:
+        raw = row.get("lever_label")
+        if isinstance(raw, str) and raw.strip():
+            return raw
+        return label_map.get(row["lever_dropped"], row["lever_dropped"])
+
+    return {
+        "baseline": {
+            "n_features": int(base["n_features"]),
+            "mean_auc": round(float(base["mean_test_auc"]), 4),
+            "mean_ap": round(float(base["mean_test_ap"]), 4),
+        },
+        "levers": [
+            {
+                "lever": lever_label(r),
+                "key": r["lever_dropped"],
+                "n_features": int(r["n_features"]),
+                "mean_auc": round(float(r["mean_test_auc"]), 4),
+                "mean_ap": round(float(r["mean_test_ap"]), 4),
+                "delta_auc": round(float(r["delta_auc_vs_full"]), 4),
+                "delta_ap": round(float(r["delta_ap_vs_full"]), 4),
+            }
+            for _, r in levers.iterrows()
+        ],
+    }
+
+
+def build_ranking_payload(
+    rk: pd.DataFrame,
+    importance_col: str,
+    *,
+    sweep: pd.DataFrame | None = None,
+) -> dict:
+    payload = {
+        "ranking": [
+            {
+                "rank": int(r["rank"]) if "rank" in rk.columns else i + 1,
+                "feature": r["feature"],
+                "importance": round(float(r[importance_col]), 4),
+            }
+            for i, (_, r) in enumerate(rk.iterrows())
+        ],
+    }
+    if sweep is not None:
+        payload["sweep"] = [
+            {
+                "k": int(r["k"]),
+                "auc": round(float(r["mean_test_auc"]), 4),
+                "ap": round(float(r["mean_test_ap"]), 4),
+            }
+            for _, r in sweep.iterrows()
+        ]
+    return payload
 
 
 def aggregate_latest(preds: pd.DataFrame) -> pd.DataFrame:
@@ -206,6 +287,89 @@ def top_tracts_payload(sub: pd.DataFrame,
             }
             for r in ranked.itertuples(index=False)
         ]
+    return out
+
+
+def load_shap_top() -> dict:
+    """Load per-tract top SHAP drivers if present."""
+    if SHAP_JSON_GZ.exists():
+        with gzip.open(SHAP_JSON_GZ, "rt") as f:
+            data = json.load(f)
+        print(f"  SHAP driver source: {SHAP_JSON_GZ}")
+        return data
+    if SHAP_JSON.exists():
+        with SHAP_JSON.open() as f:
+            data = json.load(f)
+        print(f"  SHAP driver source: {SHAP_JSON}")
+        return data
+    print("  WARN: SHAP driver source missing; county drawer drivers will be empty")
+    return {}
+
+
+def _clip_prob(p: float) -> float:
+    return max(1e-4, min(1 - 1e-4, p))
+
+
+def shap_to_pp(risk: float, shap_value: float) -> float:
+    """Convert log-odds SHAP contribution to signed probability points."""
+    p = _clip_prob(float(risk))
+    z = math.log(p / (1 - p))
+    without_feature = 1 / (1 + math.exp(-(z - float(shap_value))))
+    return (p - without_feature) * 100
+
+
+def county_drivers_payload(sub: pd.DataFrame,
+                           shap_top: dict,
+                           model_keys: list[tuple[str, int]],
+                           limit: int = 8) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {f"{model}_h{h}": [] for (model, h) in model_keys}
+    for (model, h) in model_keys:
+        key = f"{model}_h{h}"
+        risk_col = f"risk_{model}_h{h}"
+        if risk_col not in sub.columns:
+            continue
+        valid = sub.dropna(subset=[risk_col]).copy()
+        if valid.empty:
+            continue
+        weighted = valid.dropna(subset=["population"]).copy()
+        if not weighted.empty and float(weighted["population"].sum()) > 0:
+            rows = weighted
+            weights = weighted["population"].to_numpy(dtype=float)
+        else:
+            rows = valid
+            weights = np.ones(len(valid), dtype=float)
+
+        total_weight = 0.0
+        feature_sums: dict[str, dict[str, float]] = {}
+        for row, weight in zip(rows.itertuples(index=False), weights):
+            entry = shap_top.get(str(row.tract_fips))
+            drivers = entry.get(key) if isinstance(entry, dict) else None
+            if not drivers:
+                continue
+            weight = float(weight)
+            total_weight += weight
+            risk = float(getattr(row, risk_col))
+            for feat, raw_value in drivers:
+                try:
+                    shap_value = float(raw_value)
+                except (TypeError, ValueError):
+                    continue
+                rec = feature_sums.setdefault(feat, {"value": 0.0, "pp": 0.0})
+                rec["value"] += shap_value * weight
+                rec["pp"] += shap_to_pp(risk, shap_value) * weight
+
+        if total_weight <= 0:
+            out[key] = []
+            continue
+        ranked = []
+        for feat, sums in feature_sums.items():
+            ranked.append({
+                "feature": feat,
+                "value": round(sums["value"] / total_weight, 4),
+                "pp": round(sums["pp"] / total_weight, 3),
+            })
+        ranked.sort(key=lambda r: abs(r["pp"]), reverse=True)
+        out[key] = ranked[:limit]
     return out
 
 
@@ -352,6 +516,7 @@ def main() -> None:
     merged = merged.merge(tract_pop, on="tract_fips", how="left")
     pop_cov = int(merged["population"].notna().sum())
     print(f"  population coverage: {pop_cov:,} / {len(merged):,} tracts")
+    shap_top = load_shap_top()
 
     # ---- Within-state percentile ranks ----
     print("\n[3/7] Within-state percentile ranks…")
@@ -411,6 +576,7 @@ def main() -> None:
             fallback_counties.append(cf5)
 
         top_tracts = top_tracts_payload(sub, county_names_lookup, model_keys)
+        drivers = county_drivers_payload(sub, shap_top, model_keys)
         county_details[cf5] = {
             "cf": cf5,
             "st": st,
@@ -419,6 +585,7 @@ def main() -> None:
             "population": rec["population"],
             "weighting": "unweighted_fallback" if used_unweighted_fallback else "population_weighted",
             "top_tracts": top_tracts,
+            "drivers": drivers,
         }
         county_rows.append(rec)
 
@@ -712,6 +879,8 @@ def main() -> None:
     # ---- Methodology JSONs per horizon ----
     print("\n[7/7] Methodology panel JSONs (per horizon)…")
     for h in HORIZONS:
+        DIAG_ABL_CSV = ROUND5 / "diagnostics" / f"family_ablation_h{h}" / "ablation_summary.csv"
+        DIAG_RANK = ROUND5 / "diagnostics" / "feature_importance" / "ranked.csv"
         ABL_CSV = ROUND7 / "diagnostics" / f"round7_ablation_h{h}" / "ablation_summary.csv"
         SWEEP = ROUND7 / "diagnostics" / f"round7_pruned_h{h}" / "sweep_results.csv"
         RANK  = ROUND7 / "diagnostics" / f"round7_pruned_h{h}" / "feature_ranking.csv"
@@ -720,51 +889,34 @@ def main() -> None:
         POST_FI = ROUND7 / "diagnostics" / f"round7_regime_split_h{h}" / "postcovid_feature_importance.csv"
 
         # Ablation
+        abl_models = {}
+        if DIAG_ABL_CSV.exists():
+            diag_abl = pd.read_csv(DIAG_ABL_CSV)
+            diag_payload = build_ablation_payload(diag_abl, DIAGNOSTIC_FAMILY_LABEL)
+            if diag_payload:
+                abl_models["diagnostic"] = diag_payload
         if ABL_CSV.exists():
             abl = pd.read_csv(ABL_CSV)
-            base = abl[abl["lever_dropped"] == "none_baseline"].iloc[0]
-            levers = abl[abl["lever_dropped"] != "none_baseline"].sort_values("delta_ap_vs_full")
-            abl_out = {
-                "horizon": h,
-                "baseline": {
-                    "n_features": int(base["n_features"]),
-                    "mean_auc": round(float(base["mean_test_auc"]), 4),
-                    "mean_ap":  round(float(base["mean_test_ap"]), 4),
-                },
-                "levers": [
-                    {"lever": LEVER_LABEL.get(r["lever_dropped"], r["lever_dropped"]),
-                     "key":   r["lever_dropped"],
-                     "n_features": int(r["n_features"]),
-                     "mean_auc": round(float(r["mean_test_auc"]), 4),
-                     "mean_ap":  round(float(r["mean_test_ap"]), 4),
-                     "delta_auc": round(float(r["delta_auc_vs_full"]), 4),
-                     "delta_ap":  round(float(r["delta_ap_vs_full"]), 4)}
-                    for _, r in levers.iterrows()
-                ],
-            }
+            infl_payload = build_ablation_payload(abl, LEVER_LABEL)
+            if infl_payload:
+                abl_models["influenceable"] = infl_payload
+        if abl_models:
+            abl_out = {"horizon": h, **abl_models}
             with (DATA / f"ablation_h{h}.json").open("w") as f:
                 json.dump(abl_out, f, indent=2)
             print(f"  → ablation_h{h}.json")
 
         # Pruning
+        pr_models = {}
+        if DIAG_RANK.exists():
+            diag_rank = pd.read_csv(DIAG_RANK).head(10)
+            pr_models["diagnostic"] = build_ranking_payload(diag_rank, "mean")
         if SWEEP.exists() and RANK.exists():
             rk = pd.read_csv(RANK).head(10)
             sw = pd.read_csv(SWEEP).drop_duplicates(subset="k").sort_values("k")
-            pr_out = {
-                "horizon": h,
-                "ranking": [
-                    {"rank": i + 1,
-                     "feature": r["feature"],
-                     "importance": round(float(r["mean_importance"]), 4)}
-                    for i, (_, r) in enumerate(rk.iterrows())
-                ],
-                "sweep": [
-                    {"k": int(r["k"]),
-                     "auc": round(float(r["mean_test_auc"]), 4),
-                     "ap":  round(float(r["mean_test_ap"]),  4)}
-                    for _, r in sw.iterrows()
-                ],
-            }
+            pr_models["influenceable"] = build_ranking_payload(rk, "mean_importance", sweep=sw)
+        if pr_models:
+            pr_out = {"horizon": h, **pr_models}
             with (DATA / f"pruning_h{h}.json").open("w") as f:
                 json.dump(pr_out, f, indent=2)
             print(f"  → pruning_h{h}.json")
