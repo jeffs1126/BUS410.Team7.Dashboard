@@ -445,6 +445,24 @@
         </div>
       </article>
 
+      <div class="meth__modelSwitch" aria-label="Choose model for methodology cards 02 and 02b">
+        <div class="meth__modelSwitch-num" aria-hidden="true">02</div>
+        <div class="meth__modelSwitch-copy">
+          <p class="meth__modelSwitch-kicker mono">Cards 02–02b</p>
+          <p class="meth__modelSwitch-hint">Toggle just the two model-specific methodology cards below.</p>
+        </div>
+        <div class="meth__modelSwitch-controls" role="group" aria-label="Model for methodology cards">
+          <button class="methModelBtn is-active" type="button" data-meth-model="diagnostic" aria-pressed="true">
+            <span class="methModelBtn__eyebrow mono">Diagnostic</span>
+            <span class="methModelBtn__label">Full 39-feature model</span>
+          </button>
+          <button class="methModelBtn" type="button" data-meth-model="influenceable" aria-pressed="false">
+            <span class="methModelBtn__eyebrow mono">Influenceable</span>
+            <span class="methModelBtn__label">Policy-facing 20-feature model</span>
+          </button>
+        </div>
+      </div>
+
       <article class="meth__sec" data-accordion>
         <div class="meth__num">02</div>
         <div class="meth__body">
@@ -460,7 +478,7 @@
               variables can mostly stand in for it.</p>
             <p>The honest read: some lever categories carry stronger unique signal than others, and the active horizon
               matters. The slider readouts above show this plainly.</p>
-            <p class="meth__inlinenote mono" id="ablNote">Category-dependence check: <span id="ablHzLabel">2027
+            <p class="meth__inlinenote mono" id="ablNote">Category-dependence check · <span id="ablModelLabel">Diagnostic</span> · <span id="ablHzLabel">2027
                 forecast</span></p>
           </div>
         </div>
@@ -484,7 +502,7 @@
               category-dependence check above. One asks &ldquo;how much does the model use this feature when it&rsquo;s
               present?&rdquo; The other asks &ldquo;how much does the model miss this category when it is gone?&rdquo; A
               heavily used feature with low category dependence is a feature the model can route around.</p>
-            <p class="meth__inlinenote mono">Top 8 · <span id="topFeatHzLabel">2027 forecast</span></p>
+            <p class="meth__inlinenote mono" id="topFeatNote">Top 8 · <span id="topFeatModelLabel">Diagnostic</span> · <span id="topFeatHzLabel">2027 forecast</span></p>
             <p class="meth__resnote">A name ending in <span class="mono">_resid</span> means the feature was
               residualized against demographics. We regressed out the part of it that&rsquo;s explained by who lives in
               the tract (in other words, the lender-count effect has been mathematically removed), so the model has to

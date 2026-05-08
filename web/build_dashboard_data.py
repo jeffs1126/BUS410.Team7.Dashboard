@@ -8,6 +8,8 @@ Two models × two horizons (h+3 = 2027, h+6 = 2030):
 Inputs (all on disk; ROUND5 is bundled into the repo as round5-diagnostic/):
     ../round5-diagnostic/diagnostics/walk_forward_h3/test_predictions.parquet
     ../round5-diagnostic/diagnostics/walk_forward_h6/test_predictions.parquet
+    ../round5-diagnostic/diagnostics/feature_importance/ranked.csv
+    ../round5-diagnostic/diagnostics/family_ablation_h{3,6}/ablation_summary.csv
     ../diagnostics/round7_phaseA_h3/test_predictions.parquet
     ../diagnostics/round7_phaseA_h6/test_predictions.parquet
     ../diagnostics/round7_ablation_h{3,6}/ablation_summary.csv
@@ -21,8 +23,8 @@ Outputs (web/data/):
     county_stats.json               per-county drawer payload (top tracts + metadata)
     state_stats.json                per-state tract/county summaries + national histograms
     state_bbox.json                 per-state bbox for fly-to
-    ablation_h3.json, ablation_h6.json
-    pruning_h3.json, pruning_h6.json
+    ablation_h3.json, ablation_h6.json    model-keyed: diagnostic + influenceable
+    pruning_h3.json, pruning_h6.json      model-keyed: diagnostic + influenceable
     regime_h3.json, regime_h6.json
     feature_stats.json              for the Scenario explorer slider
 """
@@ -92,6 +94,18 @@ LEVER_LABEL = {
     "ssbci_state_policy": "SSBCI state policy",
 }
 
+DIAGNOSTIC_FAMILY_LABEL = {
+    "place_rural": "Rurality / place type",
+    "place_persistent_pov": "Persistent poverty",
+    "regime_flag": "HMDA availability regime",
+    "cra_county_concentration": "CRA county concentration",
+    "fdic_concentration": "FDIC concentration",
+    "fdic_other": "FDIC branch / deposit structure",
+    "hmda": "HMDA lending flow",
+    "acs_demographics": "ACS demographics",
+    "other": "Other",
+}
+
 STATE_ABBR = {
     "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE",
     "11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA",
@@ -103,6 +117,70 @@ STATE_ABBR = {
 }
 
 TERRITORIES = {"72", "78", "60", "66", "69"}
+
+
+def build_ablation_payload(df: pd.DataFrame, label_map: dict[str, str]) -> dict | None:
+    if df.empty:
+        return None
+    base_rows = df[df["lever_dropped"] == "none_baseline"]
+    if base_rows.empty:
+        return None
+    base = base_rows.iloc[0]
+    levers = df[df["lever_dropped"] != "none_baseline"].sort_values("delta_ap_vs_full")
+
+    def lever_label(row: pd.Series) -> str:
+        raw = row.get("lever_label")
+        if isinstance(raw, str) and raw.strip():
+            return raw
+        return label_map.get(row["lever_dropped"], row["lever_dropped"])
+
+    return {
+        "baseline": {
+            "n_features": int(base["n_features"]),
+            "mean_auc": round(float(base["mean_test_auc"]), 4),
+            "mean_ap": round(float(base["mean_test_ap"]), 4),
+        },
+        "levers": [
+            {
+                "lever": lever_label(r),
+                "key": r["lever_dropped"],
+                "n_features": int(r["n_features"]),
+                "mean_auc": round(float(r["mean_test_auc"]), 4),
+                "mean_ap": round(float(r["mean_test_ap"]), 4),
+                "delta_auc": round(float(r["delta_auc_vs_full"]), 4),
+                "delta_ap": round(float(r["delta_ap_vs_full"]), 4),
+            }
+            for _, r in levers.iterrows()
+        ],
+    }
+
+
+def build_ranking_payload(
+    rk: pd.DataFrame,
+    importance_col: str,
+    *,
+    sweep: pd.DataFrame | None = None,
+) -> dict:
+    payload = {
+        "ranking": [
+            {
+                "rank": int(r["rank"]) if "rank" in rk.columns else i + 1,
+                "feature": r["feature"],
+                "importance": round(float(r[importance_col]), 4),
+            }
+            for i, (_, r) in enumerate(rk.iterrows())
+        ],
+    }
+    if sweep is not None:
+        payload["sweep"] = [
+            {
+                "k": int(r["k"]),
+                "auc": round(float(r["mean_test_auc"]), 4),
+                "ap": round(float(r["mean_test_ap"]), 4),
+            }
+            for _, r in sweep.iterrows()
+        ]
+    return payload
 
 
 def aggregate_latest(preds: pd.DataFrame) -> pd.DataFrame:
@@ -801,6 +879,8 @@ def main() -> None:
     # ---- Methodology JSONs per horizon ----
     print("\n[7/7] Methodology panel JSONs (per horizon)…")
     for h in HORIZONS:
+        DIAG_ABL_CSV = ROUND5 / "diagnostics" / f"family_ablation_h{h}" / "ablation_summary.csv"
+        DIAG_RANK = ROUND5 / "diagnostics" / "feature_importance" / "ranked.csv"
         ABL_CSV = ROUND7 / "diagnostics" / f"round7_ablation_h{h}" / "ablation_summary.csv"
         SWEEP = ROUND7 / "diagnostics" / f"round7_pruned_h{h}" / "sweep_results.csv"
         RANK  = ROUND7 / "diagnostics" / f"round7_pruned_h{h}" / "feature_ranking.csv"
@@ -809,51 +889,34 @@ def main() -> None:
         POST_FI = ROUND7 / "diagnostics" / f"round7_regime_split_h{h}" / "postcovid_feature_importance.csv"
 
         # Ablation
+        abl_models = {}
+        if DIAG_ABL_CSV.exists():
+            diag_abl = pd.read_csv(DIAG_ABL_CSV)
+            diag_payload = build_ablation_payload(diag_abl, DIAGNOSTIC_FAMILY_LABEL)
+            if diag_payload:
+                abl_models["diagnostic"] = diag_payload
         if ABL_CSV.exists():
             abl = pd.read_csv(ABL_CSV)
-            base = abl[abl["lever_dropped"] == "none_baseline"].iloc[0]
-            levers = abl[abl["lever_dropped"] != "none_baseline"].sort_values("delta_ap_vs_full")
-            abl_out = {
-                "horizon": h,
-                "baseline": {
-                    "n_features": int(base["n_features"]),
-                    "mean_auc": round(float(base["mean_test_auc"]), 4),
-                    "mean_ap":  round(float(base["mean_test_ap"]), 4),
-                },
-                "levers": [
-                    {"lever": LEVER_LABEL.get(r["lever_dropped"], r["lever_dropped"]),
-                     "key":   r["lever_dropped"],
-                     "n_features": int(r["n_features"]),
-                     "mean_auc": round(float(r["mean_test_auc"]), 4),
-                     "mean_ap":  round(float(r["mean_test_ap"]), 4),
-                     "delta_auc": round(float(r["delta_auc_vs_full"]), 4),
-                     "delta_ap":  round(float(r["delta_ap_vs_full"]), 4)}
-                    for _, r in levers.iterrows()
-                ],
-            }
+            infl_payload = build_ablation_payload(abl, LEVER_LABEL)
+            if infl_payload:
+                abl_models["influenceable"] = infl_payload
+        if abl_models:
+            abl_out = {"horizon": h, **abl_models}
             with (DATA / f"ablation_h{h}.json").open("w") as f:
                 json.dump(abl_out, f, indent=2)
             print(f"  → ablation_h{h}.json")
 
         # Pruning
+        pr_models = {}
+        if DIAG_RANK.exists():
+            diag_rank = pd.read_csv(DIAG_RANK).head(10)
+            pr_models["diagnostic"] = build_ranking_payload(diag_rank, "mean")
         if SWEEP.exists() and RANK.exists():
             rk = pd.read_csv(RANK).head(10)
             sw = pd.read_csv(SWEEP).drop_duplicates(subset="k").sort_values("k")
-            pr_out = {
-                "horizon": h,
-                "ranking": [
-                    {"rank": i + 1,
-                     "feature": r["feature"],
-                     "importance": round(float(r["mean_importance"]), 4)}
-                    for i, (_, r) in enumerate(rk.iterrows())
-                ],
-                "sweep": [
-                    {"k": int(r["k"]),
-                     "auc": round(float(r["mean_test_auc"]), 4),
-                     "ap":  round(float(r["mean_test_ap"]),  4)}
-                    for _, r in sw.iterrows()
-                ],
-            }
+            pr_models["influenceable"] = build_ranking_payload(rk, "mean_importance", sweep=sw)
+        if pr_models:
+            pr_out = {"horizon": h, **pr_models}
             with (DATA / f"pruning_h{h}.json").open("w") as f:
                 json.dump(pr_out, f, indent=2)
             print(f"  → pruning_h{h}.json")

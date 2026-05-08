@@ -1430,6 +1430,7 @@ input[type="range"].slider__rng:focus-visible::-webkit-slider-thumb {
   background: var(--m1);
   transition: width .8s cubic-bezier(0.25, 1, 0.5, 1);
 }
+.topfeats[data-model="influenceable"] .topfeat__bar-fill { background: var(--m2); }
 .topfeat__v {
   font-family: var(--ff-mono);
   font-variation-settings: "MONO" 1, "CASL" 0.85;
@@ -1515,6 +1516,91 @@ input[type="range"].slider__rng:focus-visible::-webkit-slider-thumb {
   color: var(--tx-4);
   font-variation-settings: "MONO" 1, "CASL" 0.85;
   margin-left: auto;
+}
+
+.meth__modelSwitch {
+  display: grid;
+  grid-template-columns: 64px 1fr 1.05fr;
+  gap: var(--s-7);
+  align-items: end;
+  padding: 0 0 var(--s-5);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.meth__modelSwitch-num {
+  font-family: var(--ff-disp);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--tx-4);
+  letter-spacing: -0.005em;
+  font-feature-settings: "tnum" 1;
+}
+.meth__modelSwitch-kicker {
+  font-size: 0.6875rem;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--tx-4);
+  margin: 0 0 var(--s-2);
+}
+.meth__modelSwitch-hint {
+  font-family: var(--ff-body);
+  font-size: 0.875rem;
+  color: var(--tx-3);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 44ch;
+}
+.meth__modelSwitch-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.methModelBtn {
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--rule);
+  background: var(--s1);
+  color: var(--tx);
+  cursor: pointer;
+  text-align: left;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease, color 180ms ease;
+}
+.methModelBtn:hover,
+.methModelBtn:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+.methModelBtn[data-meth-model="diagnostic"] {
+  border-color: color-mix(in oklch, var(--m1) 55%, var(--rule));
+}
+.methModelBtn[data-meth-model="influenceable"] {
+  border-color: color-mix(in oklch, var(--m2) 55%, var(--rule));
+}
+.methModelBtn[data-meth-model="diagnostic"] .methModelBtn__eyebrow { color: var(--m1); }
+.methModelBtn[data-meth-model="influenceable"] .methModelBtn__eyebrow { color: var(--m2); }
+.methModelBtn.is-active[data-meth-model="diagnostic"] {
+  border-color: var(--m1);
+  background: color-mix(in oklch, var(--m1) 12%, var(--s1));
+}
+.methModelBtn.is-active[data-meth-model="influenceable"] {
+  border-color: var(--m2);
+  background: color-mix(in oklch, var(--m2) 12%, var(--s1));
+}
+.methModelBtn__eyebrow {
+  font-size: 0.6875rem;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.methModelBtn__label {
+  font-family: var(--ff-disp);
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  color: var(--tx);
 }
 
 .meth__sec {
@@ -1947,6 +2033,7 @@ body.is-feature-dict-open {
   transition: width .8s cubic-bezier(0.25, 1, 0.5, 1);
 }
 .ablrow__bar-fill.pos { left: 50%; background: var(--m2-deep); }
+.ablchart[data-model="diagnostic"] .ablrow__bar-fill.pos { background: var(--m1-deep); }
 .ablrow__bar-fill.neg { right: 50%; background: var(--coral); }
 .ablrow__v {
   font-family: var(--ff-mono);
@@ -1955,6 +2042,7 @@ body.is-feature-dict-open {
   font-size: 0.8125rem;
   text-align: right;
 }
+.ablchart[data-model="diagnostic"] .ablrow__v.pos { color: var(--m1-deep); }
 .ablrow__v.neg { color: var(--coral); }
 .ablrow__v.pos { color: var(--m2-deep); }
 
@@ -2233,8 +2321,10 @@ body.is-feature-dict-open {
   .ovl--toggles { right: var(--s-4); }
   .ovl--legend { right: var(--s-4); width: 180px; }
   .ovl--title { max-width: 70%; }
+  .meth__modelSwitch,
   .meth__sec { grid-template-columns: 1fr; gap: var(--s-5); }
   .meth__num { color: var(--m2); font-size: 1rem; }
+  .meth__modelSwitch-controls { grid-template-columns: 1fr; }
   .meth { padding: var(--s-7) var(--s-5); }
   .meth__horizonSwitch { flex-wrap: wrap; gap: var(--s-2); }
   .meth__horizonSwitch-hint { margin-left: 0; }

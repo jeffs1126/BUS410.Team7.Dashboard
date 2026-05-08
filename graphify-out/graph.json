@@ -208,54 +208,54 @@
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L109",
-      "id": "build_dashboard_data_rationale_109",
       "community": 3,
-      "norm_label": "per tract, take the most-recent (year, fold) calibrated probability."
+      "norm_label": "per tract, take the most-recent (year, fold) calibrated probability.",
+      "id": "build_dashboard_data_rationale_109"
     },
     {
       "label": "Mean across folds \u2014 the canonical AUC/AP for this project.",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L131",
-      "id": "build_dashboard_data_rationale_131",
       "community": 3,
-      "norm_label": "mean across folds \u2014 the canonical auc/ap for this project."
+      "norm_label": "mean across folds \u2014 the canonical auc/ap for this project.",
+      "id": "build_dashboard_data_rationale_131"
     },
     {
       "label": "Latest non-null tract population for county weighting.",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L148",
-      "id": "build_dashboard_data_rationale_148",
       "community": 3,
-      "norm_label": "latest non-null tract population for county weighting."
+      "norm_label": "latest non-null tract population for county weighting.",
+      "id": "build_dashboard_data_rationale_148"
     },
     {
       "label": "Load per-tract top SHAP drivers if present.",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L216",
-      "id": "build_dashboard_data_rationale_216",
       "community": 3,
-      "norm_label": "load per-tract top shap drivers if present."
+      "norm_label": "load per-tract top shap drivers if present.",
+      "id": "build_dashboard_data_rationale_216"
     },
     {
       "label": "Convert log-odds SHAP contribution to signed probability points.",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L236",
-      "id": "build_dashboard_data_rationale_236",
       "community": 3,
-      "norm_label": "convert log-odds shap contribution to signed probability points."
+      "norm_label": "convert log-odds shap contribution to signed probability points.",
+      "id": "build_dashboard_data_rationale_236"
     },
     {
       "label": "Build city search index from Census Gazetteer + decennial place-pop API.     Fal",
       "file_type": "rationale",
       "source_file": "web/build_dashboard_data.py",
       "source_location": "L335",
-      "id": "build_dashboard_data_rationale_335",
       "community": 3,
-      "norm_label": "build city search index from census gazetteer + decennial place-pop api.     fal"
+      "norm_label": "build city search index from census gazetteer + decennial place-pop api.     fal",
+      "id": "build_dashboard_data_rationale_335"
     },
     {
       "label": "app.js",

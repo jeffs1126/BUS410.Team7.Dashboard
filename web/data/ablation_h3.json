@@ -1,73 +1,147 @@
 {
   "horizon": 3,
-  "baseline": {
-    "n_features": 20,
-    "mean_auc": 0.8204,
-    "mean_ap": 0.2819
+  "diagnostic": {
+    "baseline": {
+      "n_features": 39,
+      "mean_auc": 0.8737,
+      "mean_ap": 0.3059
+    },
+    "levers": [
+      {
+        "lever": "ACS demographics",
+        "key": "acs_demographics",
+        "n_features": 29,
+        "mean_auc": 0.7209,
+        "mean_ap": 0.2502,
+        "delta_auc": -0.1527,
+        "delta_ap": -0.0557
+      },
+      {
+        "lever": "Rurality / place type",
+        "key": "place_rural",
+        "n_features": 37,
+        "mean_auc": 0.874,
+        "mean_ap": 0.2902,
+        "delta_auc": 0.0004,
+        "delta_ap": -0.0157
+      },
+      {
+        "lever": "FDIC concentration",
+        "key": "fdic_concentration",
+        "n_features": 33,
+        "mean_auc": 0.8742,
+        "mean_ap": 0.3048,
+        "delta_auc": 0.0005,
+        "delta_ap": -0.0012
+      },
+      {
+        "lever": "HMDA availability regime",
+        "key": "regime_flag",
+        "n_features": 38,
+        "mean_auc": 0.872,
+        "mean_ap": 0.3089,
+        "delta_auc": -0.0017,
+        "delta_ap": 0.003
+      },
+      {
+        "lever": "Persistent poverty",
+        "key": "place_persistent_pov",
+        "n_features": 38,
+        "mean_auc": 0.8758,
+        "mean_ap": 0.3116,
+        "delta_auc": 0.0021,
+        "delta_ap": 0.0057
+      },
+      {
+        "lever": "CRA county concentration",
+        "key": "cra_county_concentration",
+        "n_features": 35,
+        "mean_auc": 0.8731,
+        "mean_ap": 0.3123,
+        "delta_auc": -0.0006,
+        "delta_ap": 0.0063
+      },
+      {
+        "lever": "HMDA lending flow",
+        "key": "hmda",
+        "n_features": 24,
+        "mean_auc": 0.8742,
+        "mean_ap": 0.3135,
+        "delta_auc": 0.0005,
+        "delta_ap": 0.0076
+      }
+    ]
   },
-  "levers": [
-    {
-      "lever": "Lender concentration (residualized)",
-      "key": "residualized_concentration",
-      "n_features": 17,
-      "mean_auc": 0.7434,
-      "mean_ap": 0.2184,
-      "delta_auc": -0.0771,
-      "delta_ap": -0.0635
-    },
-    {
-      "lever": "MDI / mission lender",
-      "key": "mdi_mission_lender",
-      "n_features": 16,
+  "influenceable": {
+    "baseline": {
+      "n_features": 20,
       "mean_auc": 0.8204,
-      "mean_ap": 0.254,
-      "delta_auc": -0.0001,
-      "delta_ap": -0.0279
+      "mean_ap": 0.2819
     },
-    {
-      "lever": "Microlender ecosystem",
-      "key": "microlender_ecosystem",
-      "n_features": 19,
-      "mean_auc": 0.8283,
-      "mean_ap": 0.2625,
-      "delta_auc": 0.0079,
-      "delta_ap": -0.0194
-    },
-    {
-      "lever": "Branch access",
-      "key": "branch_access",
-      "n_features": 17,
-      "mean_auc": 0.8249,
-      "mean_ap": 0.2648,
-      "delta_auc": 0.0045,
-      "delta_ap": -0.0171
-    },
-    {
-      "lever": "Loan-size mix (residualized)",
-      "key": "residualized_loan_size",
-      "n_features": 18,
-      "mean_auc": 0.8256,
-      "mean_ap": 0.2696,
-      "delta_auc": 0.0052,
-      "delta_ap": -0.0123
-    },
-    {
-      "lever": "Lender mix (residualized)",
-      "key": "residualized_lender_mix",
-      "n_features": 17,
-      "mean_auc": 0.8189,
-      "mean_ap": 0.2714,
-      "delta_auc": -0.0015,
-      "delta_ap": -0.0104
-    },
-    {
-      "lever": "SSBCI state policy",
-      "key": "ssbci_state_policy",
-      "n_features": 16,
-      "mean_auc": 0.8115,
-      "mean_ap": 0.2945,
-      "delta_auc": -0.0089,
-      "delta_ap": 0.0126
-    }
-  ]
+    "levers": [
+      {
+        "lever": "Lender concentration (residualized)",
+        "key": "residualized_concentration",
+        "n_features": 17,
+        "mean_auc": 0.7434,
+        "mean_ap": 0.2184,
+        "delta_auc": -0.0771,
+        "delta_ap": -0.0635
+      },
+      {
+        "lever": "MDI / mission lender",
+        "key": "mdi_mission_lender",
+        "n_features": 16,
+        "mean_auc": 0.8204,
+        "mean_ap": 0.254,
+        "delta_auc": -0.0001,
+        "delta_ap": -0.0279
+      },
+      {
+        "lever": "Microlender ecosystem",
+        "key": "microlender_ecosystem",
+        "n_features": 19,
+        "mean_auc": 0.8283,
+        "mean_ap": 0.2625,
+        "delta_auc": 0.0079,
+        "delta_ap": -0.0194
+      },
+      {
+        "lever": "Branch access",
+        "key": "branch_access",
+        "n_features": 17,
+        "mean_auc": 0.8249,
+        "mean_ap": 0.2648,
+        "delta_auc": 0.0045,
+        "delta_ap": -0.0171
+      },
+      {
+        "lever": "Loan-size mix (residualized)",
+        "key": "residualized_loan_size",
+        "n_features": 18,
+        "mean_auc": 0.8256,
+        "mean_ap": 0.2696,
+        "delta_auc": 0.0052,
+        "delta_ap": -0.0123
+      },
+      {
+        "lever": "Lender mix (residualized)",
+        "key": "residualized_lender_mix",
+        "n_features": 17,
+        "mean_auc": 0.8189,
+        "mean_ap": 0.2714,
+        "delta_auc": -0.0015,
+        "delta_ap": -0.0104
+      },
+      {
+        "lever": "SSBCI state policy",
+        "key": "ssbci_state_policy",
+        "n_features": 16,
+        "mean_auc": 0.8115,
+        "mean_ap": 0.2945,
+        "delta_auc": -0.0089,
+        "delta_ap": 0.0126
+      }
+    ]
+  }
 }

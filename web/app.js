@@ -107,6 +107,7 @@
     activeHorizon: "h3",          // "h3" or "h6"
     methHorizon: "h3",            // independent horizon for the methodology viz panels
     methHorizonLocked: false,     // true after first user interaction with the meth switcher
+    methModel: "diagnostic",      // independent model for methodology cards 02 + 02b
     focusedState: null,           // state abbreviation, or null
     sliderShifts: {},             // key → z-score shift
     feat: null,                   // feature_stats.json (flat: { key: {...} })
@@ -709,6 +710,7 @@
     document.body.dataset.geo = "county";
     document.body.dataset.model = "m1";
     document.body.dataset.horizon = "h3";
+    STATE.methModel = STATE.activeModel === "m2" ? "influenceable" : "diagnostic";
 
     const [feat, dict, states, bbox, ablH3, ablH6, regH3, regH6, prH3, prH6] = await Promise.all([
       fetchOptional("data/feature_stats.json"),
@@ -729,6 +731,7 @@
     STATE.abl = { h3: ablH3, h6: ablH6 };
     STATE.regime = { h3: regH3, h6: regH6 };
     STATE.pruning = { h3: prH3, h6: prH6 };
+    syncMethodologyModelButtons();
 
     if (!feat) document.getElementById('sliders')?.insertAdjacentHTML('afterbegin', '<p class="data-missing">Scenario data unavailable</p>');
     if (!states) document.getElementById('topStates')?.insertAdjacentHTML('beforebegin', '<p class="data-missing">State data unavailable</p>');
@@ -2626,6 +2629,17 @@
       });
     });
 
+    // Methodology model switcher — scoped to cards 02 + 02b only
+    document.querySelectorAll("[data-meth-model]").forEach(b => {
+      b.addEventListener("click", () => {
+        const model = b.dataset.methModel;
+        if (!model || model === STATE.methModel) return;
+        STATE.methModel = model;
+        syncMethodologyModelButtons();
+        renderMethodology();
+      });
+    });
+
     // Geography
     document.querySelectorAll(".geo").forEach(b => {
       b.addEventListener("click", () => requestGeoMode(b.dataset.geo));
@@ -2637,6 +2651,29 @@
       x.classList.toggle("is-active", x.dataset.geo === g);
       x.setAttribute("aria-pressed", x.dataset.geo === g ? "true" : "false");
     });
+  }
+
+  function getMethodologyModelLabel(model = STATE.methModel) {
+    return model === "influenceable" ? "Influenceable" : "Diagnostic";
+  }
+
+  function getMethodologyHorizonLabel(horizon = STATE.methHorizon) {
+    return horizon === "h3" ? "2027 forecast" : "2030 scenario";
+  }
+
+  function syncMethodologyModelButtons() {
+    document.querySelectorAll("[data-meth-model]").forEach(x => {
+      const on = x.dataset.methModel === STATE.methModel;
+      x.classList.toggle("is-active", on);
+      x.setAttribute("aria-pressed", String(on));
+    });
+  }
+
+  function getMethodologyModelPayload(bucket, model = STATE.methModel) {
+    if (!bucket) return null;
+    if (bucket[model]) return bucket[model];
+    if (model === "influenceable" && (bucket.levers || bucket.ranking)) return bucket;
+    return null;
   }
 
   function requestGeoMode(g) {
@@ -3097,6 +3134,10 @@
     if (!STATE.states) return;
     const head = STATE.states.headline || {};
     const h = STATE.methHorizon;
+    const model = STATE.methModel;
+    const modelLabel = getMethodologyModelLabel(model);
+    const horizonLabel = getMethodologyHorizonLabel(h);
+    syncMethodologyModelButtons();
 
     // Section 0 — horizon comparison KV
     const t_h3auc = document.getElementById("t_h3auc");
@@ -3119,10 +3160,12 @@
     setText("t_m2folds", m2k && m2k.n_folds != null ? String(m2k.n_folds) : "–");
 
     // Sections 2 + 3 horizon labels
-    setText("ablHzLabel", h === "h3" ? "2027 forecast" : "2030 scenario");
-    setText("regHzLabel", h === "h3" ? "2027 forecast" : "2030 scenario");
+    setText("ablHzLabel", horizonLabel);
+    setText("ablModelLabel", modelLabel);
+    setText("regHzLabel", horizonLabel);
 
-    setText("topFeatHzLabel", h === "h3" ? "2027 forecast" : "2030 scenario");
+    setText("topFeatHzLabel", horizonLabel);
+    setText("topFeatModelLabel", modelLabel);
 
     renderAblation();
     renderTopFeats();
@@ -3133,9 +3176,13 @@
     const wrap = document.getElementById("topFeats");
     if (!wrap) return;
     wrap.innerHTML = "";
-    const pr = STATE.pruning && STATE.pruning[STATE.methHorizon];
+    wrap.dataset.model = STATE.methModel;
+    const modelLabel = getMethodologyModelLabel();
+    const horizonLabel = getMethodologyHorizonLabel();
+    wrap.setAttribute("aria-label", `${modelLabel} top features at ${horizonLabel}`);
+    const pr = getMethodologyModelPayload(STATE.pruning && STATE.pruning[STATE.methHorizon]);
     if (!pr || !pr.ranking) {
-      wrap.innerHTML = `<li class="topfeat" style="grid-template-columns:1fr"><span class="toptract__nm">Top-features data pending.</span></li>`;
+      wrap.innerHTML = `<li class="topfeat" style="grid-template-columns:1fr"><span class="topfeat__nm">${modelLabel} top-features data unavailable for ${horizonLabel}.</span></li>`;
       return;
     }
     const top8 = pr.ranking.slice(0, 8);
@@ -3160,13 +3207,17 @@
     const wrap = document.getElementById("ablChart");
     if (!wrap) return;
     wrap.innerHTML = "";
+    wrap.dataset.model = STATE.methModel;
+    const modelLabel = getMethodologyModelLabel();
+    const horizonLabel = getMethodologyHorizonLabel();
+    wrap.setAttribute("aria-label", `${modelLabel} category-dependence impact by feature group at ${horizonLabel}`);
 
-    const abl = STATE.abl[STATE.methHorizon];
+    const abl = getMethodologyModelPayload(STATE.abl[STATE.methHorizon]);
     if (!abl || !abl.levers) {
       wrap.innerHTML = `
         <div class="ablempty">
-          <div class="kicker">Category-dependence check pending</div>
-          <p>The ${STATE.activeHorizon === "h3" ? "2027 forecast" : "2030 scenario"} category-dependence table is being regenerated. Reload after <span class="mono">build_dashboard_data.py</span> picks up the new scenario-weight output.</p>
+          <div class="kicker">${modelLabel} data unavailable</div>
+          <p>No category-dependence output is available for the ${horizonLabel} ${modelLabel.toLowerCase()} model yet. Rebuild the methodology JSONs after the upstream diagnostics finish.</p>
         </div>
       `;
       return;
@@ -3210,6 +3261,17 @@
     microloan_intermediary_within_25mi: "Microlender ecosystem",
     avg_loan_size_resid: "Average loan size",
     n_lenders_tract_resid: "Lender count",
+    ruca_code: "RUCA code",
+    housing_units: "Housing units",
+    is_persistent_poverty: "Persistent poverty",
+    population: "Population",
+    median_hh_income: "Median household income",
+    pct_black: "% Black",
+    pct_minority: "% minority",
+    is_rural: "Rural flag",
+    fdic_deposit_hhi: "FDIC deposit concentration",
+    fdic_deposit_hhi_chg3yr: "FDIC concentration change (3y)",
+    fdic_top_bank_share_chg3yr: "Top-bank share change (3y)",
     pct_minority_resid: "% minority",
     median_household_income: "Median household income",
   };
